@@ -1,36 +1,4 @@
-# 音芽 · Yinya
-
-面向零基础用户的音乐积木。基于 BeepBox 音频引擎，组合旋律、和弦、贝斯与鼓点，创作并分享自己的短曲。
-
-当前版本 **v0.1.0**：中文四小节编辑、三段原创起步作品、循环试听、撤销/重做、本地作品库、分享改编、JSON 备份及 WAV 导出。
-
-![音芽桌面界面](project-notes/yinya-v0.1.0-desktop.jpg)
-
-## 开始使用
-
-需要 Node.js 和 npm：
-
-```sh
-npm ci --ignore-scripts
-npm run build-yinya
-npm run start-yinya
-```
-
-打开 `http://127.0.0.1:9093/yinya/`。Windows 完成依赖安装后，也可以双击根目录的 `启动音芽.cmd`。
-
-测试命令：`npm run test-yinya`。
-
-作品存储在当前浏览器，分享链接携带作品快照；当前服务器仅绑定本机，公开部署后才能跨设备分享。备份及分享使用音芽 v1 格式，目前不直接导入 BeepBox 历史作品。
-
-详细说明见 [音芽使用文档](README-YINYA.md)，功能与验证见 [v0.1.0 记录](project-notes/release-v0.1.0.md)。
-
-## 上游与许可证
-
-上游为 [johnnesky/beepbox](https://github.com/johnnesky/beepbox)，保留完整 Git 历史。BeepBox 代码版权属于 John Nesky 及贡献者，MIT 许可证保留于 [LICENSE.md](LICENSE.md)。音芽增加独立中文界面、品牌标识、原创起步作品和作品管理功能。
-
-原始文档保留于 [README-BEEPBOX.md](README-BEEPBOX.md)。下面也保留原版的介绍及开发说明。
-
-## BeepBox 原版说明
+# BeepBox
 
 BeepBox is an online tool for sketching and sharing instrumental melodies.
 Try it out [here](https://www.beepbox.co)!

@@ -8,6 +8,7 @@
 /dist/LICENSE.md
 /dist/synth
 /node_modules
+/website/yinya/assets/
 /website/beepbox*.js
 /website/beepbox*.js.map
 /website/player/beepbox*.js
