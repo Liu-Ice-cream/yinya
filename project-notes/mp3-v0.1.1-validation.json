@@ -1,0 +1,14 @@
+{
+  "source": "browser_download",
+  "format": "MP3",
+  "bytes": 193097,
+  "bitrate_kbps": 192,
+  "sample_rate": 44100,
+  "channels": 2,
+  "decoded_frames": 354816,
+  "decoded_seconds": 8.045714285714286,
+  "expected_music_seconds": 8,
+  "finite_pcm": true,
+  "audible_tail": true,
+  "decoder_errors": []
+}

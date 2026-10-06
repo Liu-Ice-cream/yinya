@@ -8,6 +8,7 @@ const clone = value => JSON.parse(JSON.stringify(value));
 const history = [], future = [];
 let state = preset('sprout'), activeId = null, selectedTrack = 0, selectedBar = 0, library = [], storageWarning = '', exporting = false;
 let synth = new Synth(), lastStep = -1, consumedShare = false;
+let exportJob = null;
 
 function read(key) {
   try { const text = localStorage.getItem(key); return text ? JSON.parse(text) : null; }
@@ -206,19 +207,42 @@ $('import-file').addEventListener('change', async e => {
   catch { status('导入失败：请选择有效的音芽作品 JSON 文件（20 KB 以内）。当前作品已保留。'); }
   finally { e.target.value = ''; }
 });
-$('export').addEventListener('click', async () => {
+function encodeInWorker(left, right, job) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('./assets/mp3-worker.js', document.baseURI), { type: 'module' });
+    job.worker = worker; job.reject = reject;
+    worker.onmessage = event => {
+      if (typeof event.data.progress === 'number') status(`正在压缩 MP3：${Math.round(event.data.progress * 100)}%`);
+      if (event.data.error) { worker.terminate(); reject(new Error(event.data.error)); }
+      if (event.data.data) { worker.terminate(); resolve(event.data.data); }
+    };
+    worker.onerror = () => { worker.terminate(); reject(new Error('MP3 编码器无法载入')); };
+    worker.postMessage({ left, right }, [left.buffer, right.buffer]);
+  });
+}
+async function exportAudio(format) {
   if (exporting) return; exporting = true; const snapshot = clone(state), renderer = new SongRenderer();
-  $('export').disabled = true; stop();
+  const job = { canceled: false, renderer, worker: null, reject: null }; exportJob = job;
+  $('export').disabled = true; $('export-mp3').disabled = true; $('cancel-export').hidden = false; stop();
   try {
-    for await (const progress of renderer.generate(makeSong(snapshot), 44100, false, false, 1)) status(`正在导出完整四小节：${Math.round(progress * 100)}%`);
+    for await (const progress of renderer.generate(makeSong(snapshot), 44100, false, false, 1)) status(`正在合成 ${format.toUpperCase()} 的完整四小节：${Math.round(progress * 100)}%`);
+    if (job.canceled) throw new DOMException('已取消', 'AbortError');
+    const audio = format === 'mp3' ? await encodeInWorker(renderer.outputSamplesL, renderer.outputSamplesR, job) : wavBuffer(renderer.outputSamplesL, renderer.outputSamplesR, 44100);
+    if (job.canceled) throw new DOMException('已取消', 'AbortError');
     // The rendered song is a snapshot; keep its name even if editing during export.
-    const url = URL.createObjectURL(new Blob([wavBuffer(renderer.outputSamplesL, renderer.outputSamplesR, 44100)], { type: 'audio/wav' }));
+    const url = URL.createObjectURL(new Blob([audio], { type: format === 'mp3' ? 'audio/mpeg' : 'audio/wav' }));
     const a = $('export-link');
     if (a.dataset.url) URL.revokeObjectURL(a.dataset.url);
-    a.href = url; a.dataset.url = url; a.download = (snapshot.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_') || '音芽作品') + '.wav'; a.hidden = false;
-    status('WAV 已生成：完整四小节。点击「下载音频」保存文件。');
-  } catch { status('音频导出失败，当前作品已保留。可以先备份作品文件。'); }
-  finally { exporting = false; $('export').disabled = false; }
+    a.href = url; a.dataset.url = url; a.download = (snapshot.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_') || '音芽作品') + '.' + format; a.textContent = `下载 ${format.toUpperCase()}`; a.hidden = false;
+    status(`${format.toUpperCase()} 已生成：完整四小节${format === 'mp3' ? ' · 192 kbps 立体声' : ''}。点击「下载 ${format.toUpperCase()}」保存文件。`);
+  } catch (error) { status(job.canceled || error?.name === 'AbortError' ? '已取消音频导出，作品内容保留。' : `${format.toUpperCase()} 导出失败，作品内容保留。${format === 'mp3' ? '可以尝试 WAV 导出或备份作品文件。' : '可以先备份作品文件。'}`); }
+  finally { job.worker?.terminate(); exportJob = null; exporting = false; $('export').disabled = false; $('export-mp3').disabled = false; $('cancel-export').hidden = true; }
+}
+$('export').addEventListener('click', () => exportAudio('wav'));
+$('export-mp3').addEventListener('click', () => exportAudio('mp3'));
+$('cancel-export').addEventListener('click', () => {
+  if (!exportJob) return;
+  exportJob.canceled = true; exportJob.renderer.canceled = true; exportJob.worker?.terminate(); exportJob.reject?.(new DOMException('已取消', 'AbortError'));
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && synth.playing) { stop(); status('切到后台后已暂停，回来按播放即可继续。'); } });
 document.addEventListener('keydown', e => {

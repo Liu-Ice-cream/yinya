@@ -15,4 +15,15 @@ await build({
   sourcemap: true,
   legalComments: 'eof',
 });
+await build({
+  absWorkingDir: root,
+  entryPoints: ['yinya/mp3-worker.js'],
+  bundle: true,
+  format: 'esm',
+  target: 'es2020',
+  outfile: 'website/yinya/assets/mp3-worker.js',
+  external: ['../vendor/lamejs.js'],
+  sourcemap: true,
+  legalComments: 'eof',
+});
 console.log('音芽已构建：website/yinya/index.html');

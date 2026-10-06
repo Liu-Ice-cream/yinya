@@ -1,4 +1,4 @@
-# 音芽 · v0.1.0
+# 音芽 · v0.1.1
 
 面向零基础用户的音乐积木。基于 BeepBox 的合成器，通过旋律、和弦、贝斯和鼓点四层音乐，创作一段自己的短曲。
 
@@ -10,9 +10,11 @@
 2. 按「播放循环」，切换四层积木，点网格添加或移除音符。
 3. 选择四个小节中的任意一节继续修改；旋律和贝斯使用 C 大调五声音阶。
 4. 调整速度、音量、音色与声部开关；修改可以撤销和重做。
-5. 保存到「我的作品」，通过分享链接发送作品快照，或导出 WAV 和 JSON 备份。
+5. 保存到「我的作品」，通过分享链接发送作品快照，或导出 MP3、WAV 和 JSON 备份。
 
-「导出 WAV」完成后点击「下载音频」。四小节在 120 BPM 下为 8 秒，导出为 44.1 kHz、16 位立体声 PCM。
+「导出 MP3」完成后点击「下载 MP3」，获得 44.1 kHz、192 kbps 立体声文件；适合日常分享与播放。需要未压缩音频时，按「导出 WAV」后点击「下载 WAV」，获得 44.1 kHz、16 位立体声 PCM。
+
+两种格式都导出当前作品的完整四小节。120 BPM 下音乐为 8 秒，MP3 因编码延迟和补齐会略长，验收文件约 8.046 秒。合成和编码均在浏览器本地完成，编码器随项目保存，不使用外部音频服务。导出时显示进度，也可按「取消导出」；取消或失败不会丢失作品。
 
 作品存在当前设备的当前浏览器中。草稿会自动保存，命名作品需按「保存作品」。清理浏览器数据会移除本地作品，建议保留 JSON 备份。通过「另存改编」或分享链接载入的作品，保存时创建新版本。
 
@@ -35,22 +37,25 @@ npm run start-yinya
 npm ci --ignore-scripts --cache .npm-cache
 ```
 
-构建入口 `scripts/build-yinya.mjs` 将界面、BeepBox 合成器及上游 WAV 渲染器打包到 `website/yinya/assets/app.js`。运行服务器仅绑定 `127.0.0.1`。可设置 `YINYA_PORT` 环境变量修改命令行服务器端口；双击启动器使用 9093。
+构建入口 `scripts/build-yinya.mjs` 将界面、BeepBox 合成器及上游 WAV 渲染器打包到 `website/yinya/assets/app.js`。同时生成独立的 MP3 Worker（`assets/mp3-worker.js`），运行时引用原样保存的 `vendor/lamejs.js`。运行服务器仅绑定 `127.0.0.1`。可设置 `YINYA_PORT` 环境变量修改命令行服务器端口；双击启动器使用 9093。
 
 - `yinya/model.js`：作品结构、原创起步作品、校验、分享编码和音频数据转换。
 - `yinya/app.js`：中文编辑界面、本地存档、分享、导入导出与音频调度。
-- `website/yinya/`：页面、样式、标识与许可证。
-- `tests/`：作品数据及实际 BeepBox 音频引擎测试。
-- `project-notes/release-v0.1.0.md`：功能、验收与当前限制。
+- `yinya/mp3.js`、`mp3-worker.js`：PCM 到 MP3 的适配及后台编码。
+- `website/yinya/`：页面、样式、标识、独立编码器与许可证。
+- `tests/`：作品数据、实际 BeepBox 音频引擎及独立 MP3 解码测试（10 项）。
+- `project-notes/release-v0.1.1.md`：功能、验收与当前限制。
 
 桌面与手机预览：
 
-![音芽桌面版](project-notes/yinya-v0.1.0-desktop.jpg)
+![音芽 MP3 导出](project-notes/yinya-v0.1.1-mp3.jpg)
 
-![音芽手机布局](project-notes/yinya-v0.1.0-mobile.jpg)
+![音芽手机布局](project-notes/yinya-v0.1.1-mobile.jpg)
 
 ## 上游与授权
 
 上游：[johnnesky/beepbox](https://github.com/johnnesky/beepbox)。版权归 John Nesky 及贡献者，MIT 许可证保留于 `LICENSE.md`，页面也提供署名和许可证入口。
 
-音芽首版的界面、品牌标识和三段起步作品为本次新增。声音通过合成生成，不使用外部歌曲或音频采样。暂未加入 MP3 导出，不会加载其额外编码依赖。
+音芽首版的界面、品牌标识和三段起步作品为本次新增。声音通过合成生成，不使用外部歌曲或音频采样。MP3 使用独立的 LGPL-3.0 编码器，仅在导出时加载，保留原样模块及完整许可证。详情见 [第三方组件说明](THIRD_PARTY_NOTICES.md)；页面底部也提供「开源组件说明」入口。
+
+作品的 v1 数据格式及本地存储键保持兼容，0.1.0 的草稿、作品库、分享链接和 JSON 备份可继续使用。

@@ -1,0 +1,4 @@
+# Keep third-party copies byte-identical across Windows and Unix checkouts.
+website/yinya/vendor/* -text -whitespace
+website/yinya/notices/*LICENSE.txt -text -whitespace
+website/yinya/notices/*-only.txt -text -whitespace
