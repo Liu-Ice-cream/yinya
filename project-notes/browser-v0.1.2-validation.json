@@ -1,0 +1,73 @@
+[
+  {
+    "case": "chord_add",
+    "status": "试听和弦 · C · 明亮。再点一次移除。"
+  },
+  {
+    "case": "bass_add",
+    "status": "试听贝斯 · do。再点一次移除。"
+  },
+  {
+    "case": "hat_add",
+    "status": "试听鼓点 · 沙帽。再点一次移除。"
+  },
+  {
+    "case": "snare_add_with_existing_hat",
+    "status": "试听鼓点 · 小鼓。再点一次移除。"
+  },
+  {
+    "case": "remove_note",
+    "status": "已移除鼓点 · 小鼓。"
+  },
+  {
+    "case": "preview_disabled",
+    "status": "已添加鼓点 · 低鼓。点击试听已关闭。"
+  },
+  {
+    "case": "preference_persists",
+    "checked": false
+  },
+  {
+    "case": "muted_layer",
+    "status": "已添加旋律 · 高音 mi。这一层已关闭，暂不试听。"
+  },
+  {
+    "case": "zero_volume",
+    "status": "已添加旋律 · 高音 mi。这一层音量为零，暂不试听。"
+  },
+  {
+    "case": "edit_during_loop",
+    "status": "已添加旋律 · 高音 mi，将在循环中播放。",
+    "playing": "true"
+  },
+  {
+    "case": "preview_toggle_does_not_stop_loop",
+    "playing": "true",
+    "position": "正在播放 1 / 4 节 · 2 拍"
+  },
+  {
+    "case": "keyboard_preview",
+    "status": "试听旋律 · 高音 mi。再点一次移除。"
+  },
+  {
+    "case": "undo_note",
+    "pressed": "false"
+  },
+  {
+    "case": "redo_note",
+    "pressed": "true"
+  },
+  {
+    "case": "mp3_export_after_preview",
+    "status": "MP3 已生成：完整四小节 · 192 kbps 立体声。点击「下载 MP3」保存文件。"
+  },
+  {
+    "case": "wav_export_after_preview",
+    "status": "WAV 已生成：完整四小节。点击「下载 WAV」保存文件。"
+  },
+  {
+    "case": "remove_note_during_loop",
+    "status": "已移除旋律 · do，循环已更新。",
+    "playing": "true"
+  }
+]

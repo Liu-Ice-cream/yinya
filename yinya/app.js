@@ -1,14 +1,16 @@
 import { Song, Synth } from '../synth/synth.ts';
 import { SongRenderer } from '../editor/SongRenderer.ts';
 import { TRACKS, PRESETS, blank, preset, validate, encode, decode, songJSON, wavBuffer } from './model.js';
+import { PreviewPlayer } from './preview.js';
 
 const $ = id => document.getElementById(id);
-const KEYS = { draft: 'yinya.v1.draft', library: 'yinya.v1.library' };
+const KEYS = { draft: 'yinya.v1.draft', library: 'yinya.v1.library', preferences: 'yinya.v1.preferences' };
 const clone = value => JSON.parse(JSON.stringify(value));
 const history = [], future = [];
 let state = preset('sprout'), activeId = null, selectedTrack = 0, selectedBar = 0, library = [], storageWarning = '', exporting = false;
 let synth = new Synth(), lastStep = -1, consumedShare = false;
 let exportJob = null;
+const preview = new PreviewPlayer();
 
 function read(key) {
   try { const text = localStorage.getItem(key); return text ? JSON.parse(text) : null; }
@@ -20,6 +22,7 @@ function write(key, value) {
 }
 function status(message) { $('status').textContent = message; }
 const rawLibrary = read(KEYS.library);
+let clickPreview = read(KEYS.preferences)?.clickPreview !== false;
 function parseLibrary(raw) {
   const items = [];
   if (Array.isArray(raw)) for (const item of raw.slice(0, 100)) {
@@ -55,12 +58,14 @@ function draftSave() {
 function snapshot() { return { state: clone(state), id: activeId }; }
 function commit(next, message, id = activeId) {
   const clean = validate(next);
+  preview.stop();
   history.push(snapshot()); if (history.length > 100) history.shift(); future.length = 0;
   state = clean; activeId = id;
   syncAudio(); draftSave(); render(); if (message) status(message);
 }
 function restore(source, target) {
   if (!source.length) return;
+  preview.stop();
   target.push(snapshot()); const entry = source.pop(); state = entry.state; activeId = entry.id;
   syncAudio(); draftSave(); render(); status('已恢复上一步作品内容。');
 }
@@ -82,7 +87,7 @@ function renderPresets() {
 }
 function renderTracks() {
   $('tracks').replaceChildren(...TRACKS.map((t, i) => {
-    const b = button('', () => { selectedTrack = i; renderTracks(); renderGrid(); renderControls(); }, 'track');
+    const b = button('', () => { preview.stop(); selectedTrack = i; renderTracks(); renderGrid(); renderControls(); }, 'track');
     b.setAttribute('aria-pressed', String(selectedTrack === i)); b.setAttribute('aria-label', `编辑${t.name}`);
     const text = document.createElement('span'), dot = document.createElement('span'); dot.className = 'dot' + (!state.tracks[i].enabled ? ' off' : '');
     text.append(dot, t.name); const small = document.createElement('small'); small.textContent = state.tracks[i].enabled ? '已加入' : '已关闭'; b.append(text, small); return b;
@@ -97,20 +102,31 @@ function renderControls() {
   $('voice-label').hidden = selectedTrack !== 0; $('voice').value = state.voice || 'triangle';
   $('undo').disabled = history.length === 0; $('redo').disabled = future.length === 0;
   $('library-count').textContent = library.length;
+  $('click-preview').checked = clickPreview;
+  $('grid-tip').textContent = synth.playing ? '点亮或移除格子，直接改变循环；方向键可移动焦点。' : clickPreview ? '点亮即可试听，再点一次移除；方向键可移动焦点。' : '点击添加，再点一次移除；开启「点击试听」可听见单音。';
   $('play').textContent = synth.playing ? '暂停播放' : '播放循环'; $('play').setAttribute('aria-pressed', String(synth.playing));
 }
 function renderBars() {
   $('bars').replaceChildren(...Array.from({ length: 4 }, (_, i) => {
-    const b = button(`第 ${i + 1} 节`, () => { selectedBar = i; renderBars(); renderGrid(); });
+    const b = button(`第 ${i + 1} 节`, () => { preview.stop(); selectedBar = i; renderBars(); renderGrid(); });
     b.setAttribute('aria-pressed', String(i === selectedBar)); return b;
   }));
 }
 function editCell(row, col) {
   const next = clone(state), t = next.tracks[selectedTrack], bar = t.bars[selectedBar];
-  if (t.id === 'drums') bar[col] ^= (1 << (2 - row));
-  else { const value = t.id === 'chords' ? row : 7 - row; bar[col] = bar[col] === value ? -1 : value; }
+  let added;
+  if (t.id === 'drums') { bar[col] ^= (1 << (2 - row)); added = Boolean(bar[col] & (1 << (2 - row))); }
+  else { const value = t.id === 'chords' ? row : 7 - row; bar[col] = bar[col] === value ? -1 : value; added = bar[col] !== -1; }
   commit(next);
   const cell = $('grid').querySelector(`[data-row="${row}"][data-col="${col}"]`); if (cell) cell.focus({ preventScroll: true });
+  const track = TRACKS[selectedTrack], label = `${track.name} · ${track.rows[row]}`;
+  if (synth.playing) { status(added ? `已添加${label}，将在循环中播放。` : `已移除${label}，循环已更新。`); return; }
+  if (!added) { status(`已移除${label}。`); return; }
+  if (!clickPreview || exporting) { status(`已添加${label}。${exporting ? '导出完成后可以试听。' : '点击试听已关闭。'}`); return; }
+  if (!t.enabled || t.volume === 0) { status(`已添加${label}。${!t.enabled ? '这一层已关闭' : '这一层音量为零'}，暂不试听。`); return; }
+  preview.play(state, selectedTrack, row).then(started => {
+    if (started) status(`试听${label}。再点一次移除。`);
+  }).catch(() => status(`已添加${label}，浏览器未能启动声音。可按「播放循环」重试。`));
 }
 function renderGrid() {
   const t = TRACKS[selectedTrack], bar = state.tracks[selectedTrack].bars[selectedBar], cols = bar.length;
@@ -135,7 +151,7 @@ function renderGrid() {
   lastStep = -1;
 }
 function render() { renderTracks(); renderControls(); renderBars(); renderGrid(); }
-function stop() { synth.pause(); renderControls(); lastStep = -1; $('position').textContent = '循环 4 小节'; $('grid').querySelectorAll('.playing').forEach(e => e.classList.remove('playing')); }
+function stop() { preview.stop(); synth.pause(); renderControls(); lastStep = -1; $('position').textContent = '循环 4 小节'; $('grid').querySelectorAll('.playing').forEach(e => e.classList.remove('playing')); }
 function playbackFrame() {
   if (synth.playing) {
     const absolute = Math.floor(synth.playhead * 16), bar = Math.floor(synth.playhead) % 4, step = absolute % 16;
@@ -148,10 +164,17 @@ function playbackFrame() {
 }
 $('play').addEventListener('click', () => {
   if (synth.playing) { stop(); status('已暂停。可以继续修改格子。'); return; }
+  preview.stop();
   try { synth.play(); renderControls(); status('四小节循环播放中。点格子会直接改变这段音乐。'); }
   catch { synth.pause(); renderControls(); status('浏览器未能启动音频，请检查声音权限后再次按播放。'); }
 });
-$('restart').addEventListener('click', () => { synth.snapToStart(); synth.resetEffects(); lastStep = -1; status('已回到第一小节开头。'); });
+$('click-preview').addEventListener('change', e => {
+  clickPreview = e.target.checked; preview.stop(); renderControls();
+  const message = clickPreview ? '点击试听已开启：暂停时点亮格子，就能听见这个音。' : '点击试听已关闭，可以安静编辑；播放循环仍可使用。';
+  try { localStorage.setItem(KEYS.preferences, JSON.stringify({ clickPreview })); status(message); }
+  catch { status(message + ' 这次设置未能保存到浏览器。'); }
+});
+$('restart').addEventListener('click', () => { preview.stop(); synth.snapToStart(); synth.resetEffects(); lastStep = -1; status('已回到第一小节开头。'); });
 $('title').addEventListener('input', e => {
   history.push(snapshot()); if (history.length > 100) history.shift(); future.length = 0;
   state.title = e.target.value.slice(0, 60); draftSave();
@@ -244,9 +267,12 @@ $('cancel-export').addEventListener('click', () => {
   if (!exportJob) return;
   exportJob.canceled = true; exportJob.renderer.canceled = true; exportJob.worker?.terminate(); exportJob.reject?.(new DOMException('已取消', 'AbortError'));
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden && synth.playing) { stop(); status('切到后台后已暂停，回来按播放即可继续。'); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { preview.dispose(); if (synth.playing) { stop(); status('切到后台后已暂停，回来按播放即可继续。'); } } });
+window.addEventListener('pagehide', () => preview.dispose());
 document.addEventListener('keydown', e => {
   if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(document.activeElement?.tagName) || document.querySelector('dialog[open]')) return;
   if (e.code === 'Space') { e.preventDefault(); $('play').click(); }
 });
-renderPresets(); syncAudio(); render(); if (consumedShare) draftSave(); if (storageWarning) status(storageWarning); requestAnimationFrame(playbackFrame);
+renderPresets(); syncAudio(); render(); if (consumedShare) draftSave();
+status(clickPreview ? '点亮一个格子试听，或按「播放循环」听完整四小节。' : '点击试听已关闭；可以安静编辑，或按「播放循环」听完整四小节。');
+if (storageWarning) status(storageWarning); requestAnimationFrame(playbackFrame);

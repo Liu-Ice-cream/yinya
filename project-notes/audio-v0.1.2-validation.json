@@ -1,0 +1,12 @@
+{
+  "source": "browser_download_after_note_preview",
+  "format": "MP3",
+  "bytes": 193097,
+  "sample_rate": 44100,
+  "channels": 2,
+  "frames": 354816,
+  "seconds": 8.045714285714286,
+  "finite_pcm": true,
+  "audible_tail": true,
+  "errors": []
+}
