@@ -1,14 +1,24 @@
 # 音芽 · Yinya
 
-面向零基础用户的音乐积木。基于 BeepBox 音频引擎，组合旋律、和弦、贝斯与鼓点，创作并分享自己的短曲。
+[![Yinya CI](https://github.com/Liu-Ice-cream/yinya/actions/workflows/yinya-ci.yml/badge.svg)](https://github.com/Liu-Ice-cream/yinya/actions/workflows/yinya-ci.yml)
 
-当前版本 **v0.1.3**：中文四小节编辑、三段原创起步作品、点击音符即时试听、播放小节自动跟随、循环试听、撤销/重做、本地作品库、分享改编、JSON 备份及 WAV / MP3 导出。
+让旋律发芽。音芽是面向零基础用户的音乐积木：点亮格子，组合旋律、和弦、贝斯与鼓点，留下自己的一段音乐。
 
-![音芽桌面界面](project-notes/yinya-v0.1.3-desktop.jpg)
+当前版本 **v0.1.3 · 早期体验版**，基于 [BeepBox](https://github.com/johnnesky/beepbox) 合成器开发独立中文创作界面。
 
-## 开始使用
+![音芽播放与编辑界面](project-notes/yinya-v0.1.3-desktop.jpg)
 
-需要 Node.js 和 npm：
+## 可以做什么
+
+- 从「晴日发芽」「月下散步」「像素出发」三个原创起点或空白开始。
+- 编辑四层音乐积木，调整速度、音量、旋律音色与声部开关，撤销和重做。
+- 点击音符即时试听，循环播放完整四小节，自动跟随当前播放小节；手动查看后可一键恢复跟随。
+- 在当前浏览器保存作品，通过链接分享快照并继续改编，导入/导出 JSON 备份。
+- 在浏览器本地导出 WAV 或 MP3，MP3 为 44.1 kHz、192 kbps 立体声。
+
+## 本地体验
+
+需要 **Node.js 24** 和 npm。在项目目录执行：
 
 ```sh
 npm ci --ignore-scripts
@@ -16,95 +26,30 @@ npm run build-yinya
 npm run start-yinya
 ```
 
-打开 `http://127.0.0.1:9093/yinya/`。Windows 完成依赖安装后，也可以双击根目录的 `启动音芽.cmd`。
+打开 <http://127.0.0.1:9093/yinya/>。Windows 完成安装后，也可双击 `启动音芽.cmd`。当前尚未提供公开在线演示，静态网站部署方法见 [部署说明](docs/DEPLOYMENT.md)。
 
-测试命令：`npm run test-yinya`。
+## 当前范围
 
-作品存储在当前浏览器，分享链接携带作品快照；当前服务器仅绑定本机，公开部署后才能跨设备分享。备份及分享使用音芽 v1 格式，目前不直接导入 BeepBox 历史作品。
+音乐长度固定为 **四小节**；旋律和贝斯使用 C 大调五声音阶，适合短循环创作。120 BPM 下完整音乐为 8 秒。小节长度扩展已列入 [后续方向](docs/ROADMAP.md)。
 
-详细说明见 [音芽使用文档](README-YINYA.md)，功能与验证见 [v0.1.3 记录](project-notes/release-v0.1.3.md)。
+作品仅保存在当前设备、当前浏览器、当前网站地址下，无账号和云端同步。清理网站数据可能丢失作品，建议下载 JSON 备份。本机分享地址只能在本机使用；部署到可访问的网站后才能跨设备打开链接。当前使用音芽 v1 作品格式，不直接导入 BeepBox 历史链接或 JSON。
 
-## 上游与许可证
+## 开发与反馈
 
-上游为 [johnnesky/beepbox](https://github.com/johnnesky/beepbox)，保留完整 Git 历史。BeepBox 代码版权属于 John Nesky 及贡献者，MIT 许可证保留于 [LICENSE.md](LICENSE.md)。音芽增加独立中文界面、品牌标识、原创起步作品和作品管理功能。
-
-MP3 编码使用独立的 LGPL-3.0 组件 @breezystack/lamejs 1.2.7，原样代码、署名及许可见 [第三方组件说明](THIRD_PARTY_NOTICES.md)。
-
-原始文档保留于 [README-BEEPBOX.md](README-BEEPBOX.md)。下面也保留原版的介绍及开发说明。
-
-## BeepBox 原版说明
-
-BeepBox is an online tool for sketching and sharing instrumental melodies.
-Try it out [here](https://www.beepbox.co)!
-
-All song data is packaged into the URL at the top of your browser. When you make
-changes to the song, the URL is updated to reflect your changes. When you are
-satisfied with your song, just copy and paste the URL to save and share your
-song!
-
-BeepBox is a passion project, and will always be free to use. If you find it
-valuable and have the means, any gratuity via
-[PayPal](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=QZJTX9GRYEV9N&currency_code=USD)
-would be appreciated!
-
-BeepBox is developed by [John Nesky](https://johnnesky.com/). This source code
-is available under the [MIT license](LICENSE.md).
-
-## Synthesizer library
-
-You can use BeepBox's synthesizer to play music in your own web app! See
-[the npm package](https://www.npmjs.com/package/beepbox) for more details.
-
-## Compiling
-
-The code is written in TypeScript, which requires Node & npm so
-[install those first](https://nodejs.org/en/download). To contribute changes,
-you'll also need [git](https://github.com/git-guides/install-git). Then to build
-this project, open the command line and run:
-
-```
-git clone https://github.com/johnnesky/beepbox.git
-cd beepbox
-npm install
-npm run build
+```sh
+npm run test-yinya
+npm run package-yinya
 ```
 
-## Code
+自动测试覆盖作品数据、实际合成器、点击试听、播放跟随和独立 MP3 解码。GitHub Actions 在 Linux 与 Windows 上构建和测试，主分支检查通过后提供 `yinya-site` 静态网站包。
 
-The code is divided into several folders.
+- [详细使用说明](README-YINYA.md)
+- [版本变化](CHANGELOG.md)
+- [贡献与问题反馈](CONTRIBUTING.md)
+- [部署说明](docs/DEPLOYMENT.md)
 
-The [synth/](synth) folder has just the code you need to be able to play BeepBox
-songs out loud, and you could use this code in your own projects, like a web
-game. After compiling the synth code, open website/synth_example.html to see a
-demo using it. To rebuild just the synth code, run:
+## 来源与许可证
 
-```
-npm run build-synth
-```
+音芽保留 BeepBox 的完整 Git 历史及原作者署名。BeepBox 和音芽代码采用 [MIT 许可证](LICENSE.md)。MP3 编码器 **@breezystack/lamejs 1.2.7** 作为独立、原样的 LGPL-3.0 模块分发，其许可和源码入口见 [第三方组件说明](THIRD_PARTY_NOTICES.md)。原创起步作品使用合成声音，不包含外部歌曲或录音采样。
 
-The [editor/](editor) folder has additional code to display the online song
-editor interface. After compiling the editor code, open website/index.html to
-see the editor interface. To rebuild just the editor code, run:
-
-```
-npm run build-editor
-```
-
-The [player/](player) folder has a miniature song player interface for embedding
-on other sites. To rebuild just the player code, run:
-
-```
-npm run build-player
-```
-
-The [website/](website) folder contains index.html files to view the interfaces.
-The build process outputs JavaScript files into this folder.
-
-## Dependencies
-
-Most of the dependencies are listed in [package.json](package.json), although
-I'd like to note that BeepBox also has an indirect, optional dependency on
-[lamejs](https://www.npmjs.com/package/lamejs) via
-[jsdelivr](https://www.jsdelivr.com/) for exporting .mp3 files. If the user
-attempts to export an .mp3 file, BeepBox will direct the browser to download
-that dependency on demand.
+上游教程保留于 [README-BEEPBOX.md](README-BEEPBOX.md)。

@@ -22,7 +22,7 @@
 
 ## 已执行的验证
 
-1. `npm ci --ignore-scripts --cache .npm-cache --no-audit --no-fund`：成功安装 237 个包，保留原有锁文件。
+1. `npm ci --ignore-scripts --no-audit --no-fund`：成功安装 237 个包，保留原有锁文件。
 2. 上游 TypeScript 编译检查通过；使用 esbuild 构建原版编辑器，在真实浏览器中确认原版编辑界面正常载入。此处并未执行需要 Bash 的全套上游构建脚本。
 3. `npm run build-yinya`：通过。
 4. `npm run test-yinya`：7 个测试通过，覆盖中文分享往返、错误输入、音符顺序和边界、WAV 头与采样、三段作品的实际非零 PCM、四声部独立合成与静音、60/180 BPM 下四小节循环边界。
