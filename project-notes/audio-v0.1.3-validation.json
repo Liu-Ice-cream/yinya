@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-07",
+  "mp3": {
+    "bytes": 193097,
+    "errors": [],
+    "channels": 2,
+    "sampleRate": 44100,
+    "samples": 354816,
+    "duration": 8.045714285714286,
+    "nonzeroLastBar": true
+  },
+  "wav": {
+    "bytes": 1411244,
+    "format": "RIFF",
+    "channels": 2,
+    "sampleRate": 44100,
+    "bits": 16,
+    "frames": 352800,
+    "duration": 8
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-07",
+  "evidence": [
+    {
+      "beats": 1,
+      "cells": 8,
+      "editing": "1",
+      "following": true,
+      "grid": "旋律第2小节音符网格",
+      "playing": "1",
+      "position": "播放 2 / 4 节 · 1 拍",
+      "test": "follow bar 2"
+    },
+    {
+      "editing": "0",
+      "playing": "0",
+      "test": "loop wrap"
+    },
+    {
+      "cells": 0,
+      "editing": "2",
+      "following": false,
+      "playing": "0",
+      "position": "播放 1 / 4 节 · 3 拍 · 查看第 3 节",
+      "returnVisible": true,
+      "test": "manual selection survives loop"
+    },
+    {
+      "editing": "0",
+      "following": true,
+      "playing": "0",
+      "position": "播放 1 / 4 节 · 4 拍",
+      "test": "return to playback"
+    },
+    {
+      "bar": "3",
+      "col": "1",
+      "row": "0",
+      "test": "keyboard focus after bar transition"
+    },
+    {
+      "cells": 0,
+      "playing": 0,
+      "test": "paused clears highlights"
+    },
+    {
+      "follow": false,
+      "preview": false,
+      "test": "preferences persist together"
+    },
+    {
+      "grid": "旋律第3小节音符网格",
+      "status": "试听旋律 · 高音 mi。再点一次移除。",
+      "test": "paused click preview"
+    },
+    {
+      "editing": "3",
+      "following": false,
+      "status": "已恢复上一步作品内容。",
+      "test": "copy undo redo preserve manual view"
+    },
+    {
+      "editing": "1",
+      "follow": true,
+      "playing": "1",
+      "test": "next play resets temporary suspension"
+    },
+    {
+      "returnVisible": true,
+      "scrollWidth": 375,
+      "test": "mobile layout",
+      "width": 375
+    },
+    {
+      "filename": "音芽013导出验收.wav",
+      "status": "WAV 已生成：完整四小节。点击「下载 WAV」保存文件。",
+      "test": "audio downloads"
+    },
+    {
+      "beats": 1,
+      "cells": 4,
+      "grid": "和弦第1小节音符网格",
+      "test": "chord beat highlighting"
+    },
+    {
+      "beats": 1,
+      "cells": 3,
+      "grid": "鼓点第1小节音符网格",
+      "test": "drum step highlighting"
+    }
+  ]
+}

@@ -2,12 +2,13 @@ import { Song, Synth } from '../synth/synth.ts';
 import { SongRenderer } from '../editor/SongRenderer.ts';
 import { TRACKS, PRESETS, blank, preset, validate, encode, decode, songJSON, wavBuffer } from './model.js';
 import { PreviewPlayer } from './preview.js';
+import { PlaybackFollower, playbackPosition } from './playback.js';
 
 const $ = id => document.getElementById(id);
 const KEYS = { draft: 'yinya.v1.draft', library: 'yinya.v1.library', preferences: 'yinya.v1.preferences' };
 const clone = value => JSON.parse(JSON.stringify(value));
 const history = [], future = [];
-let state = preset('sprout'), activeId = null, selectedTrack = 0, selectedBar = 0, library = [], storageWarning = '', exporting = false;
+let state = preset('sprout'), activeId = null, selectedTrack = 0, library = [], storageWarning = '', exporting = false;
 let synth = new Synth(), lastStep = -1, consumedShare = false;
 let exportJob = null;
 const preview = new PreviewPlayer();
@@ -22,7 +23,9 @@ function write(key, value) {
 }
 function status(message) { $('status').textContent = message; }
 const rawLibrary = read(KEYS.library);
-let clickPreview = read(KEYS.preferences)?.clickPreview !== false;
+const preferences = read(KEYS.preferences);
+let clickPreview = preferences?.clickPreview !== false;
+const follower = new PlaybackFollower(preferences?.followPlayback !== false);
 function parseLibrary(raw) {
   const items = [];
   if (Array.isArray(raw)) for (const item of raw.slice(0, 100)) {
@@ -87,7 +90,7 @@ function renderPresets() {
 }
 function renderTracks() {
   $('tracks').replaceChildren(...TRACKS.map((t, i) => {
-    const b = button('', () => { preview.stop(); selectedTrack = i; renderTracks(); renderGrid(); renderControls(); }, 'track');
+    const b = button('', () => { preview.stop(); selectedTrack = i; renderTracks(); renderGrid(); renderControls(); syncPlayback(); }, 'track');
     b.setAttribute('aria-pressed', String(selectedTrack === i)); b.setAttribute('aria-label', `编辑${t.name}`);
     const text = document.createElement('span'), dot = document.createElement('span'); dot.className = 'dot' + (!state.tracks[i].enabled ? ' off' : '');
     text.append(dot, t.name); const small = document.createElement('small'); small.textContent = state.tracks[i].enabled ? '已加入' : '已关闭'; b.append(text, small); return b;
@@ -106,14 +109,26 @@ function renderControls() {
   $('grid-tip').textContent = synth.playing ? '点亮或移除格子，直接改变循环；方向键可移动焦点。' : clickPreview ? '点亮即可试听，再点一次移除；方向键可移动焦点。' : '点击添加，再点一次移除；开启「点击试听」可听见单音。';
   $('play').textContent = synth.playing ? '暂停播放' : '播放循环'; $('play').setAttribute('aria-pressed', String(synth.playing));
 }
-function renderBars() {
-  $('bars').replaceChildren(...Array.from({ length: 4 }, (_, i) => {
-    const b = button(`第 ${i + 1} 节`, () => { preview.stop(); selectedBar = i; renderBars(); renderGrid(); });
-    b.setAttribute('aria-pressed', String(i === selectedBar)); return b;
+function renderBars(view = { ...playbackPosition(synth.playhead), playing: synth.playing }) {
+  if (!$('bars').children.length) $('bars').append(...Array.from({ length: 4 }, (_, i) => {
+    const b = button(`第 ${i + 1} 节`, () => {
+      preview.stop(); follower.select(i, synth.playing); renderGrid(); syncPlayback();
+      if (synth.playing) status(`正在查看第 ${i + 1} 小节，音乐继续播放。按「回到播放位置」恢复跟随。`);
+    });
+    b.dataset.bar = i; return b;
   }));
+  $('bars').querySelectorAll('button').forEach((b, i) => {
+    const playing = view.playing && i === view.bar;
+    b.setAttribute('aria-pressed', String(i === follower.selectedBar));
+    b.classList.toggle('playing', playing);
+    if (playing) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+    b.title = `${i === follower.selectedBar ? '当前编辑' : '查看'}第 ${i + 1} 小节${playing ? ' · 正在播放' : ''}`;
+  });
+  $('follow-playback').checked = follower.following;
+  $('return-to-playback').hidden = !synth.playing || follower.following;
 }
 function editCell(row, col) {
-  const next = clone(state), t = next.tracks[selectedTrack], bar = t.bars[selectedBar];
+  const next = clone(state), t = next.tracks[selectedTrack], bar = t.bars[follower.selectedBar];
   let added;
   if (t.id === 'drums') { bar[col] ^= (1 << (2 - row)); added = Boolean(bar[col] & (1 << (2 - row))); }
   else { const value = t.id === 'chords' ? row : 7 - row; bar[col] = bar[col] === value ? -1 : value; added = bar[col] !== -1; }
@@ -129,9 +144,10 @@ function editCell(row, col) {
   }).catch(() => status(`已添加${label}，浏览器未能启动声音。可按「播放循环」重试。`));
 }
 function renderGrid() {
-  const t = TRACKS[selectedTrack], bar = state.tracks[selectedTrack].bars[selectedBar], cols = bar.length;
-  const grid = $('grid'); grid.replaceChildren(); grid.className = 'grid' + (t.id === 'chords' ? ' chords' : '');
-  grid.setAttribute('aria-label', `${t.name}第${selectedBar + 1}小节音符网格`);
+  const t = TRACKS[selectedTrack], bar = state.tracks[selectedTrack].bars[follower.selectedBar], cols = bar.length;
+  const grid = $('grid'), focused = grid.contains(document.activeElement) ? { ...document.activeElement.dataset } : null;
+  grid.replaceChildren(); grid.className = 'grid' + (t.id === 'chords' ? ' chords' : '');
+  grid.setAttribute('aria-label', `${t.name}第${follower.selectedBar + 1}小节音符网格`);
   for (let row = 0; row < t.rows.length; row++) {
     const label = document.createElement('span'); label.className = 'row-label'; label.textContent = t.rows[row]; grid.append(label);
     for (let col = 0; col < cols; col++) {
@@ -147,34 +163,48 @@ function renderGrid() {
     }
   }
   grid.append(document.createElement('span'));
-  for (let col = 0; col < cols; col++) { const n = document.createElement('span'); n.className = 'beat-label'; n.textContent = t.id === 'chords' ? `${col + 1} 拍` : col % 4 === 0 ? `${col / 4 + 1} 拍` : '·'; grid.append(n); }
+  for (let col = 0; col < cols; col++) { const n = document.createElement('span'); n.className = 'beat-label'; n.dataset.col = col; n.textContent = t.id === 'chords' ? `${col + 1} 拍` : col % 4 === 0 ? `${col / 4 + 1} 拍` : '·'; grid.append(n); }
+  if (focused?.row !== undefined && focused?.col !== undefined) grid.querySelector(`[data-row="${focused.row}"][data-col="${focused.col}"]`)?.focus({ preventScroll: true });
   lastStep = -1;
 }
-function render() { renderTracks(); renderControls(); renderBars(); renderGrid(); }
-function stop() { preview.stop(); synth.pause(); renderControls(); lastStep = -1; $('position').textContent = '循环 4 小节'; $('grid').querySelectorAll('.playing').forEach(e => e.classList.remove('playing')); }
+function render() { follower.update(synth.playhead, synth.playing); renderTracks(); renderControls(); renderBars(); renderGrid(); syncPlayback(); }
+function stop() { preview.stop(); synth.pause(); follower.stop(); renderControls(); syncPlayback(); }
+function syncPlayback() {
+  const oldBar = follower.selectedBar, view = follower.update(synth.playhead, synth.playing);
+  if (oldBar !== follower.selectedBar) renderGrid();
+  renderBars(view);
+  const active = view.playing && view.bar === follower.selectedBar;
+  $('position').textContent = view.playing ? `播放 ${view.bar + 1} / 4 节 · ${view.beat + 1} 拍${active ? '' : ` · 查看第 ${follower.selectedBar + 1} 节`}` : `编辑第 ${follower.selectedBar + 1} 节 · 循环 4 小节`;
+  const col = selectedTrack === 1 ? view.beat : view.step;
+  $('grid').querySelectorAll('.cell').forEach(cell => cell.classList.toggle('playing', active && Number(cell.dataset.col) === col));
+  $('grid').querySelectorAll('.beat-label').forEach(label => label.classList.toggle('playing', active && Number(label.dataset.col) === (selectedTrack === 1 ? view.beat : view.beat * 4)));
+  lastStep = view.playing ? view.absolute : -1;
+}
 function playbackFrame() {
-  if (synth.playing) {
-    const absolute = Math.floor(synth.playhead * 16), bar = Math.floor(synth.playhead) % 4, step = absolute % 16;
-    if (absolute !== lastStep) {
-      lastStep = absolute; $('position').textContent = `正在播放 ${bar + 1} / 4 节 · ${Math.floor(step / 4) + 1} 拍`;
-      $('grid').querySelectorAll('.cell').forEach(cell => cell.classList.toggle('playing', bar === selectedBar && Number(cell.dataset.col) === (selectedTrack === 1 ? Math.floor(step / 4) : step)));
-    }
-  }
+  if (synth.playing && Math.floor(synth.playhead * 16) !== lastStep) syncPlayback();
   requestAnimationFrame(playbackFrame);
 }
 $('play').addEventListener('click', () => {
   if (synth.playing) { stop(); status('已暂停。可以继续修改格子。'); return; }
   preview.stop();
-  try { synth.play(); renderControls(); status('四小节循环播放中。点格子会直接改变这段音乐。'); }
+  try { follower.start(); synth.play(); renderControls(); syncPlayback(); status(follower.following ? '四小节循环播放中，网格自动跟随。手动选择小节可暂停跟随。' : '四小节循环播放中。点格子会直接改变音乐，也可开启「跟随播放」。'); }
   catch { synth.pause(); renderControls(); status('浏览器未能启动音频，请检查声音权限后再次按播放。'); }
 });
+function savePreferences(message) {
+  try { localStorage.setItem(KEYS.preferences, JSON.stringify({ clickPreview, followPlayback: follower.enabled })); status(message); }
+  catch { status(message + ' 这次设置未能保存到浏览器。'); }
+}
 $('click-preview').addEventListener('change', e => {
   clickPreview = e.target.checked; preview.stop(); renderControls();
   const message = clickPreview ? '点击试听已开启：暂停时点亮格子，就能听见这个音。' : '点击试听已关闭，可以安静编辑；播放循环仍可使用。';
-  try { localStorage.setItem(KEYS.preferences, JSON.stringify({ clickPreview })); status(message); }
-  catch { status(message + ' 这次设置未能保存到浏览器。'); }
+  savePreferences(message);
 });
-$('restart').addEventListener('click', () => { preview.stop(); synth.snapToStart(); synth.resetEffects(); lastStep = -1; status('已回到第一小节开头。'); });
+$('follow-playback').addEventListener('change', e => {
+  follower.setEnabled(e.target.checked); syncPlayback();
+  savePreferences(follower.enabled ? '跟随播放已开启，播放时网格显示正在播放的小节。' : '跟随播放已关闭，可以留在当前小节编辑。');
+});
+$('return-to-playback').addEventListener('click', () => { follower.setEnabled(true); syncPlayback(); savePreferences('已回到播放位置，网格继续跟随。'); });
+$('restart').addEventListener('click', () => { preview.stop(); synth.snapToStart(); synth.resetEffects(); syncPlayback(); status('已回到第一小节开头。'); });
 $('title').addEventListener('input', e => {
   history.push(snapshot()); if (history.length > 100) history.shift(); future.length = 0;
   state.title = e.target.value.slice(0, 60); draftSave();
@@ -187,8 +217,8 @@ $('volume').addEventListener('input', e => { const next = clone(state); next.tra
 $('voice').addEventListener('change', e => { const next = clone(state); next.voice = e.target.value; commit(next, '旋律音色已更新。'); });
 $('toggle-track').addEventListener('click', () => { const next = clone(state), t = next.tracks[selectedTrack]; t.enabled = !t.enabled; commit(next, `${TRACKS[selectedTrack].name}${t.enabled ? '已加入' : '已关闭'}。音符内容仍然保留。`); });
 $('undo').addEventListener('click', () => restore(history, future)); $('redo').addEventListener('click', () => restore(future, history));
-$('copy-bar').addEventListener('click', () => { const next = clone(state), dest = (selectedBar + 1) % 4; next.tracks[selectedTrack].bars[dest] = [...next.tracks[selectedTrack].bars[selectedBar]]; commit(next, `已复制到第 ${dest + 1} 小节；撤销可恢复原内容。`); selectedBar = dest; renderBars(); renderGrid(); });
-$('clear-bar').addEventListener('click', () => { const next = clone(state), t = next.tracks[selectedTrack]; t.bars[selectedBar].fill(t.id === 'drums' ? 0 : -1); commit(next, '这一节已清空；撤销可以恢复。'); });
+$('copy-bar').addEventListener('click', () => { const next = clone(state), dest = (follower.selectedBar + 1) % 4; next.tracks[selectedTrack].bars[dest] = [...next.tracks[selectedTrack].bars[follower.selectedBar]]; commit(next, `已复制到第 ${dest + 1} 小节；撤销可恢复原内容。`); follower.select(dest, synth.playing); renderGrid(); syncPlayback(); });
+$('clear-bar').addEventListener('click', () => { const next = clone(state), t = next.tracks[selectedTrack]; t.bars[follower.selectedBar].fill(t.id === 'drums' ? 0 : -1); commit(next, '这一节已清空；撤销可以恢复。'); });
 
 function renderLibrary() {
   const list = $('library-list'); list.replaceChildren();
