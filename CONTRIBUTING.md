@@ -14,6 +14,7 @@
 
 ```sh
 npm ci --ignore-scripts
+npm run check-privacy
 npm run test-yinya
 npm run package-yinya
 npm run start-yinya
@@ -24,6 +25,8 @@ npm run start-yinya
 提交时说明具体问题、修改后的行为和验证结果。涉及音频、作品兼容或播放状态的改动，应补充有意义的测试；界面调整请验证桌面和窄屏操作。涉及作品数据时保留既有 v1 草稿、分享链接与备份兼容，或明确迁移方案。
 
 ## 代码与许可证
+
+提交使用 GitHub 提供的 `users.noreply.github.com` 隐藏邮箱。提交前运行隐私检查，避免将凭据、本机目录或个人记录加入仓库；检查只输出文件及问题类别，不打印匹配的敏感内容。
 
 主要开发入口为 `yinya/` 与 `website/yinya/`。`synth/`、`editor/`、`player/` 保留上游代码，音芽构建复用其中的合成器和音频渲染器。
 

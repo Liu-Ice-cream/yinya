@@ -8,6 +8,7 @@
 		"package-yinya": "npm run build-yinya && node scripts/package-yinya.mjs",
 		"start-yinya": "node scripts/serve-yinya.mjs",
 		"test-yinya": "node --test tests/*.test.mjs",
+		"check-privacy": "node scripts/check-privacy.mjs",
 		"build": "npm run clean && npm run build-synth && npm run build-player && npm run build-editor",
 		"build-synth": "bash ./scripts/compile_synth.sh",
 		"build-player": "bash ./scripts/compile_player.sh",
