@@ -1,5 +1,7 @@
 // Original 音芽 interface and patterns. BeepBox audio code retains its MIT notice.
-export const VERSION = 1;
+export const VERSION = 2;
+export const BAR_COUNTS = [4, 8, 16];
+export const GROUP_SIZE = 4;
 export const PITCHES = [0, 2, 4, 7, 9, 12, 14, 16];
 export const CHORDS = [[36, 40, 43], [33, 36, 40], [31, 33, 38], [28, 31, 38]];
 export const TRACKS = [
@@ -8,8 +10,10 @@ export const TRACKS = [
   { id: 'bass', name: '贝斯', hint: '用低音托住节奏。少放几个音，也会很好听。', rows: ['高音 mi', '高音 re', '高音 do', 'la', 'sol', 'mi', 're', 'do'], wave: 'square' },
   { id: 'drums', name: '鼓点', hint: '低鼓定节拍，小鼓加重音，沙帽填空隙。三行可以同时点亮。', rows: ['沙帽', '小鼓', '低鼓'] },
 ];
-export function blank(title = '我的第一段旋律') {
-  return { version: VERSION, title, tempo: 108, tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: 4 }, () => Array(t.id === 'chords' ? 4 : 16).fill(t.id === 'drums' ? 0 : -1)) })) };
+function emptyBar(id) { return Array(id === 'chords' ? 4 : 16).fill(id === 'drums' ? 0 : -1); }
+export function blank(title = '我的第一段旋律', barCount = 4) {
+  if (!BAR_COUNTS.includes(barCount)) throw new Error('请选择 4、8 或 16 小节');
+  return { version: VERSION, barCount, title, tempo: 108, tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)) })) };
 }
 export const PRESETS = [
   { id: 'sprout', name: '晴日发芽', detail: '轻快 · 108 BPM', tempo: 108, melody: [0, -1, 2, -1, 3, -1, 4, -1, 5, -1, 4, -1, 3, -1, 2, -1], chords: [0, 0, 1, 2], wave: 'triangle' },
@@ -30,12 +34,14 @@ export function preset(id) {
   return s;
 }
 export function validate(value) {
-  if (!value || value.version !== VERSION || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽 v1 作品');
-  const result = blank(value.title);
+  if (!value || ![1, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
+  // v1 always had four bars. Reading old data migrates a copy, never the original.
+  const barCount = value.version === 1 ? 4 : value.barCount;
+  const result = blank(value.title, barCount);
   result.tempo = value.tempo;
   result.voice = ['triangle', 'rounded', 'square'].includes(value.voice) ? value.voice : 'triangle';
   result.tracks = value.tracks.map((t, index) => {
-    if (!t || t.id !== TRACKS[index].id || typeof t.enabled !== 'boolean' || !Number.isInteger(t.volume) || t.volume < 0 || t.volume > 100 || !Array.isArray(t.bars) || t.bars.length !== 4) throw new Error('音乐轨道数据不完整');
+    if (!t || t.id !== TRACKS[index].id || typeof t.enabled !== 'boolean' || !Number.isInteger(t.volume) || t.volume < 0 || t.volume > 100 || !Array.isArray(t.bars) || t.bars.length !== barCount) throw new Error('音乐轨道数据不完整');
     const length = t.id === 'chords' ? 4 : 16;
     const min = t.id === 'drums' ? 0 : -1, max = t.id === 'chords' ? 3 : 7;
     const bars = t.bars.map(bar => {
@@ -45,6 +51,31 @@ export function validate(value) {
     return { id: t.id, enabled: t.enabled, volume: t.volume, bars };
   });
   return result;
+}
+export function resize(value, barCount, fill = 'empty') {
+  if (!BAR_COUNTS.includes(barCount) || !['empty', 'repeat'].includes(fill)) throw new Error('不支持的小节扩展方式');
+  const result = validate(value), previousCount = result.barCount;
+  for (const track of result.tracks) {
+    const previous = track.bars;
+    track.bars = Array.from({ length: barCount }, (_, i) => i < previousCount || fill === 'repeat' ? [...previous[i % previousCount]] : emptyBar(track.id));
+  }
+  result.barCount = barCount;
+  return result;
+}
+export function rangeHasNotes(value, start, end) {
+  const state = validate(value);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > state.barCount || start >= end) throw new Error('小节范围无效');
+  return state.tracks.some(track => track.bars.slice(start, end).some(bar => bar.some(n => track.id === 'drums' ? n !== 0 : n !== -1)));
+}
+export function copyGroup(value, source, destination) {
+  const state = validate(value);
+  for (const start of [source, destination]) if (!Number.isInteger(start) || start < 0 || start % GROUP_SIZE !== 0 || start + GROUP_SIZE > state.barCount) throw new Error('段落范围无效');
+  if (source === destination) throw new Error('请选择另一段作为复制目标');
+  for (const track of state.tracks) {
+    const bars = track.bars.slice(source, source + GROUP_SIZE).map(bar => [...bar]);
+    track.bars.splice(destination, GROUP_SIZE, ...bars);
+  }
+  return state;
 }
 export function encode(state) {
   const bytes = new TextEncoder().encode(JSON.stringify(validate(state)));
@@ -60,7 +91,7 @@ export function decode(hash) {
 function note(pitches, start, end, volume = 90) { return { pitches, points: [{ tick: start, pitchBend: 0, volume }, { tick: end, pitchBend: 0, volume: 0 }] }; }
 export function songJSON(value) {
   const s = validate(value);
-  return { format: 'BeepBox', version: 9, scale: 'easy :)', key: 'C', introBars: 0, loopBars: 4, beatsPerBar: 4, ticksPerBeat: 4, beatsPerMinute: s.tempo, channels: s.tracks.map((t, index) => ({
+  return { format: 'BeepBox', version: 9, scale: 'easy :)', key: 'C', introBars: 0, loopBars: s.barCount, beatsPerBar: 4, ticksPerBeat: 4, beatsPerMinute: s.tempo, channels: s.tracks.map((t, index) => ({
     type: t.id === 'drums' ? 'drum' : 'pitch',
     instruments: [{ type: t.id === 'drums' ? 'drumset' : 'chip', wave: index === 0 ? s.voice : TRACKS[index].wave, volume: t.volume, effects: ['transition type', 'chord type'], transition: 'normal', chord: 'simultaneous', fadeInSeconds: 0, fadeOutTicks: -1,
       ...(t.id === 'drums' ? { drums: Array.from({ length: 12 }, (_, drum) => ({ filterEnvelope: drum >= 8 ? 'twang 1' : 'twang 2', spectrum: Array.from({ length: 30 }, (_, band) => drum === 0 ? Math.max(0, 100 - band * 17) : drum === 4 ? (band > 3 && band < 17 ? 75 : 15) : drum === 8 ? (band > 17 ? 80 : 0) : 0) })) } : {}) }],
@@ -70,7 +101,7 @@ export function songJSON(value) {
       if (t.id === 'chords') return [note(CHORDS[n], step * 4, step * 4 + 4, 65)];
       return [note([PITCHES[n] + (t.id === 'bass' ? 24 : 48)], step, step + 1)];
     }) })),
-    sequence: [1, 2, 3, 4],
+    sequence: Array.from({ length: s.barCount }, (_, i) => i + 1),
   })) };
 }
 export function wavBuffer(left, right, sampleRate) {

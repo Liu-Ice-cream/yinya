@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "date": "2026-10-10",
+  "browser": "Chromium-based desktop preview",
+  "checks": {
+    "legacyLibraryVisible": true,
+    "emptyEightBarExtension": true,
+    "copyAllVoices": true,
+    "copyUndoRedo": true,
+    "overwriteCancelConfirmUndo": true,
+    "shrinkCancelConfirmUndo": true,
+    "repeatSixteenBarExtension": true,
+    "saveAndReloadSixteenBars": true,
+    "shareSnapshotOpensAsSixteenBars": true,
+    "mp3WorkerCompletesSixteenBars": true,
+    "manualNavigationAndReturnToPlayback": true,
+    "mobileGroupNavigationAndCopyDialog": true,
+    "mobilePageHasNoHorizontalOverflow": true,
+    "livePlaybackFollowsIntoLaterGroups": true
+  },
+  "mobileViewport": {
+    "width": 390,
+    "height": 844
+  },
+  "screenshots": [
+    "yinya-v0.2.0-desktop.jpg",
+    "yinya-v0.2.0-mobile.jpg"
+  ],
+  "automatedTests": {
+    "passed": 29,
+    "includes": "actual long-song loop timing, last-bar WAV/MP3 export, independent MP3 decoding, legacy format and new length validation"
+  },
+  "limits": [
+    "Mobile checks use a narrow desktop browser viewport, not a physical phone.",
+    "Browser download events were unavailable in the preview automation; file contents and durations are independently checked by automated export/decoder tests."
+  ]
+}

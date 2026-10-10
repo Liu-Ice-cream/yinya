@@ -4,7 +4,8 @@ import { build } from 'esbuild';
 import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { preset, songJSON, validate } from '../yinya/model.js';
+import { preset, songJSON, validate, resize } from '../yinya/model.js';
+import { PlaybackFollower } from '../yinya/playback.js';
 
 await mkdir('build', { recursive: true });
 await build({ entryPoints: ['synth/index.ts'], bundle: true, platform: 'node', format: 'esm', outfile: 'build/yinya-audio-test.mjs' });
@@ -44,5 +45,22 @@ test('sample based timing crosses loop boundary correctly at min and max speed',
     synth.synthesize(new Float32Array(samples), new Float32Array(samples), samples);
     const expected = .1 / (240 / tempo);
     assert.ok(Math.abs(synth.playhead - expected) < .005, `tempo ${tempo}: ${synth.playhead} vs ${expected}`);
+  }
+});
+
+test('actual long-song playhead and follower cross four-bar groups and the full loop at both tempo limits', () => {
+  for (const count of [8, 16]) for (const tempo of [60, 180]) {
+    const state = resize(preset('sprout'), count, 'repeat'); state.tempo = tempo;
+    const { synth } = render(state), follower = new PlaybackFollower(true, count);
+    synth.snapToStart(); synth.resetEffects();
+    const samplesPerBar = synth.getSamplesPerBar();
+    const first = Math.ceil(samplesPerBar * 4 + 4410);
+    synth.synthesize(new Float32Array(first), new Float32Array(first), first);
+    assert.equal(follower.update(synth.playhead, true).selectedBar, 4);
+    const remaining = Math.ceil(samplesPerBar * (count - 4));
+    synth.synthesize(new Float32Array(remaining), new Float32Array(remaining), remaining);
+    const expected = .1 / (240 / tempo);
+    assert.ok(Math.abs(synth.playhead - expected) < .005);
+    assert.equal(follower.update(synth.playhead, true).selectedBar, 0);
   }
 });

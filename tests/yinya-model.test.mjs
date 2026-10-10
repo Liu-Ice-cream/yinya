@@ -9,7 +9,7 @@ test('Chinese titles, edits, volume and muted layers survive share round trip', 
 });
 test('invalid links and malformed data cannot enter the audio engine', () => {
   for (const link of ['#other=1', '#yinya=%%%%', '#yinya=' + 'x'.repeat(20001)]) assert.throws(() => decode(link));
-  for (const modify of [s => s.tempo = NaN, s => s.tempo = 999, s => s.tracks[0].bars[0][0] = 99, s => s.tracks[0].bars.pop(), s => s.tracks[3].volume = '100', s => s.version = 2]) {
+  for (const modify of [s => s.tempo = NaN, s => s.tempo = 999, s => s.tracks[0].bars[0][0] = 99, s => s.tracks[0].bars.pop(), s => s.tracks[3].volume = '100', s => s.version = 3]) {
     const s = preset('sprout'); modify(s); assert.throws(() => validate(s));
   }
 });
