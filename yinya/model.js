@@ -1,5 +1,6 @@
 // Original 音芽 interface and patterns. BeepBox audio code retains its MIT notice.
-export const VERSION = 2;
+export const VERSION = 3;
+export const NOTE_LENGTHS = [1, 2, 4, 8];
 export const BAR_COUNTS = [4, 8, 16];
 export const GROUP_SIZE = 4;
 export const PITCHES = [0, 2, 4, 7, 9, 12, 14, 16];
@@ -13,7 +14,7 @@ export const TRACKS = [
 function emptyBar(id) { return Array(id === 'chords' ? 4 : 16).fill(id === 'drums' ? 0 : -1); }
 export function blank(title = '我的第一段旋律', barCount = 4) {
   if (!BAR_COUNTS.includes(barCount)) throw new Error('请选择 4、8 或 16 小节');
-  return { version: VERSION, barCount, title, tempo: 108, tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)) })) };
+  return { version: VERSION, barCount, title, tempo: 108, tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)), ...(t.id === 'melody' ? { durations: Array.from({ length: barCount }, () => Array(16).fill(1)) } : {}) })) };
 }
 export const PRESETS = [
   { id: 'sprout', name: '晴日发芽', detail: '轻快 · 108 BPM', tempo: 108, melody: [0, -1, 2, -1, 3, -1, 4, -1, 5, -1, 4, -1, 3, -1, 2, -1], chords: [0, 0, 1, 2], wave: 'triangle' },
@@ -34,7 +35,7 @@ export function preset(id) {
   return s;
 }
 export function validate(value) {
-  if (!value || ![1, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
+  if (!value || ![1, 2, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
   // v1 always had four bars. Reading old data migrates a copy, never the original.
   const barCount = value.version === 1 ? 4 : value.barCount;
   const result = blank(value.title, barCount);
@@ -48,7 +49,27 @@ export function validate(value) {
       if (!Array.isArray(bar) || bar.length !== length || bar.some(n => !Number.isInteger(n) || n < min || n > max)) throw new Error('音符数据超出支持范围');
       return [...bar];
     });
-    return { id: t.id, enabled: t.enabled, volume: t.volume, bars };
+    let durations;
+    if (t.id === 'melody') {
+      if (value.version < VERSION) durations = bars.map(() => Array(16).fill(1));
+      else {
+        if (!Array.isArray(t.durations) || t.durations.length !== barCount) throw new Error('旋律时长数据不完整');
+        durations = t.durations.map((lengths, index) => {
+          if (!Array.isArray(lengths) || lengths.length !== 16) throw new Error('旋律时长数据不完整');
+          let end = 0;
+          for (let step = 0; step < 16; step++) {
+            const length = lengths[step];
+            if (!Number.isInteger(length) || length < 1 || length > 8 || (bars[index][step] < 0 && length !== 1)) throw new Error('旋律时长超出支持范围');
+            if (bars[index][step] >= 0) {
+              if (step < end || step + length > 16) throw new Error('旋律音符重叠或超出小节');
+              end = step + length;
+            }
+          }
+          return [...lengths];
+        });
+      }
+    }
+    return { id: t.id, enabled: t.enabled, volume: t.volume, bars, ...(durations ? { durations } : {}) };
   });
   return result;
 }
@@ -58,6 +79,10 @@ export function resize(value, barCount, fill = 'empty') {
   for (const track of result.tracks) {
     const previous = track.bars;
     track.bars = Array.from({ length: barCount }, (_, i) => i < previousCount || fill === 'repeat' ? [...previous[i % previousCount]] : emptyBar(track.id));
+    if (track.durations) {
+      const lengths = track.durations;
+      track.durations = Array.from({ length: barCount }, (_, i) => i < previousCount || fill === 'repeat' ? [...lengths[i % previousCount]] : Array(16).fill(1));
+    }
   }
   result.barCount = barCount;
   return result;
@@ -74,7 +99,38 @@ export function copyGroup(value, source, destination) {
   for (const track of state.tracks) {
     const bars = track.bars.slice(source, source + GROUP_SIZE).map(bar => [...bar]);
     track.bars.splice(destination, GROUP_SIZE, ...bars);
+    if (track.durations) track.durations.splice(destination, GROUP_SIZE, ...track.durations.slice(source, source + GROUP_SIZE).map(bar => [...bar]));
   }
+  return state;
+}
+// The grid contains note starts; held cells resolve to their owning note.
+export function melodyAt(value, barIndex, step) {
+  const track = value.tracks[0];
+  if (!Number.isInteger(barIndex) || barIndex < 0 || barIndex >= value.barCount || !Number.isInteger(step) || step < 0 || step >= 16) throw new Error('旋律位置无效');
+  const bar = track.bars[barIndex], lengths = track.durations[barIndex];
+  for (let start = step; start >= 0; start--) if (bar[start] >= 0) return start + lengths[start] > step ? { start, pitch: bar[start], duration: lengths[start] } : null;
+  return null;
+}
+export function setMelodyNote(value, barIndex, step, pitch, duration) {
+  if (!Number.isInteger(pitch) || pitch < 0 || pitch > 7 || !NOTE_LENGTHS.includes(duration)) throw new Error('旋律音高或时长无效');
+  const state = validate(value), previous = melodyAt(state, barIndex, step);
+  const track = state.tracks[0], bar = track.bars[barIndex], lengths = track.durations[barIndex];
+  if (previous && previous.start < step) lengths[previous.start] = step - previous.start;
+  const next = bar.findIndex((n, i) => i > step && n >= 0);
+  const actual = Math.min(duration, (next < 0 ? 16 : next) - step);
+  bar[step] = pitch; lengths[step] = actual;
+  return { state, start: step, duration: actual, limited: actual !== duration };
+}
+export function removeMelodyNote(value, barIndex, step) {
+  const state = validate(value), note = melodyAt(state, barIndex, step);
+  if (note) { state.tracks[0].bars[barIndex][note.start] = -1; state.tracks[0].durations[barIndex][note.start] = 1; }
+  return state;
+}
+export function copyBar(value, trackIndex, source, destination) {
+  const state = validate(value);
+  if (!Number.isInteger(trackIndex) || trackIndex < 0 || trackIndex > 3 || ![source, destination].every(i => Number.isInteger(i) && i >= 0 && i < state.barCount)) throw new Error('复制小节位置无效');
+  const track = state.tracks[trackIndex]; track.bars[destination] = [...track.bars[source]];
+  if (track.durations) track.durations[destination] = [...track.durations[source]];
   return state;
 }
 export function encode(state) {
@@ -95,11 +151,11 @@ export function songJSON(value) {
     type: t.id === 'drums' ? 'drum' : 'pitch',
     instruments: [{ type: t.id === 'drums' ? 'drumset' : 'chip', wave: index === 0 ? s.voice : TRACKS[index].wave, volume: t.volume, effects: ['transition type', 'chord type'], transition: 'normal', chord: 'simultaneous', fadeInSeconds: 0, fadeOutTicks: -1,
       ...(t.id === 'drums' ? { drums: Array.from({ length: 12 }, (_, drum) => ({ filterEnvelope: drum >= 8 ? 'twang 1' : 'twang 2', spectrum: Array.from({ length: 30 }, (_, band) => drum === 0 ? Math.max(0, 100 - band * 17) : drum === 4 ? (band > 3 && band < 17 ? 75 : 15) : drum === 8 ? (band > 17 ? 80 : 0) : 0) })) } : {}) }],
-    patterns: t.bars.map(bar => ({ notes: bar.flatMap((n, step) => {
+    patterns: t.bars.map((bar, barIndex) => ({ notes: bar.flatMap((n, step) => {
       if (n < 0 || (t.id === 'drums' && n === 0)) return [];
       if (t.id === 'drums') return [note([0, 4, 8].filter((_, bit) => n & (1 << bit)), step, step + 1, 70)];
       if (t.id === 'chords') return [note(CHORDS[n], step * 4, step * 4 + 4, 65)];
-      return [note([PITCHES[n] + (t.id === 'bass' ? 24 : 48)], step, step + 1)];
+      return [note([PITCHES[n] + (t.id === 'bass' ? 24 : 48)], step, step + (t.id === 'melody' ? t.durations[barIndex][step] : 1))];
     }) })),
     sequence: Array.from({ length: s.barCount }, (_, i) => i + 1),
   })) };

@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-14",
+  "version": "0.2.1",
+  "browser": "Codex in-app Chromium",
+  "checks": {
+    "legacyV2DraftAndLibraryLoaded": true,
+    "eightStepMelodyShowsEightHeldCells": true,
+    "continuationSelectsWholeNote": true,
+    "durationChangeUndoRedo": true,
+    "deleteButtonUndo": true,
+    "keyboardDeleteFromContinuation": true,
+    "barEndClipsToThreeStepsAndShowsActualLength": true,
+    "newPitchSplitsEarlierHeldNote": true,
+    "copyBarPreservesDurations": true,
+    "repeatExpansionAndGroupCopyPreserveDurations": true,
+    "saveAndReloadPreserveDurations": true,
+    "shareLinkRestoresDurationsInNewTab": true,
+    "durationToolsHiddenOnChordTrack": true,
+    "mp3WorkerCompletesEightBarSong": true,
+    "livePlaybackPositionAdvances": true,
+    "mobileSelectionAndDeleteUndo": true,
+    "noConsoleErrors": true
+  },
+  "mobileViewport": { "width": 390, "height": 844, "documentWidth": 375, "contentWidth": 375 },
+  "automatedTests": { "passed": 35, "failed": 0, "includes": ["v1 and v2 timing compatibility", "overlap and bar-boundary validation", "copy and share duration preservation", "real preview at 60 and 180 BPM, 44100 and 48000 Hz", "16-bar WAV and independently decoded MP3 sustain"] },
+  "limits": ["Mobile layout uses viewport emulation; physical devices remain to be tested.", "File content is validated by independent audio tests; browser validation confirms generated download links."]
+}
