@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-16",
+  "version": "0.3.0",
+  "browser": "Codex in-app Chromium",
+  "checks": {
+    "legacyV3DraftLibraryAndLongNotesLoaded": true,
+    "sixVoiceChoicesShown": true,
+    "voiceChangePreservesGridNotes": true,
+    "voiceChangeUndoRedo": true,
+    "pianoPhrasePlaysAndCompletes": true,
+    "guitarPhrasePlaysAndCompletes": true,
+    "changingVoiceStopsOldPhrase": true,
+    "rapidPhraseStartStop": true,
+    "selectedFourBarGroupControlsAuditionRange": true,
+    "fullPlaybackTakesOverFromPhrase": true,
+    "phraseToolsHiddenOnChordTrack": true,
+    "emptyAndMutedPhraseButtonsDisabled": true,
+    "pianoSaveReloadKeepsTimbreAndNotes": true,
+    "shareLinkLoadsPianoAndLongNotesInNewTab": true,
+    "naturalEndingMp3WorkerCompletesWithRelease": true,
+    "loopEndingWavCompletes": true,
+    "exportDisablesPhraseAndEndingControl": true,
+    "endingPreferenceSurvivesReload": true,
+    "mobileElectricPianoPhraseStartStop": true,
+    "noConsoleErrors": true
+  },
+  "mobileViewport": { "width": 390, "height": 844, "documentWidth": 375, "contentWidth": 375 },
+  "automatedTests": { "passed": 44, "failed": 0, "includes": ["v1-v3 timbre and timing compatibility", "all melody pitches, 60/180 BPM, 44100/48000 Hz", "six-voice energy calibration and volume", "natural release and exact loop duration", "16-bar WAV and independently decoded MP3", "pending audio and rendering cancellation"] },
+  "limits": ["Mobile layout uses viewport emulation; physical phones remain to be tested.", "Signal-energy checks do not replace subjective listening on different speakers.", "File bytes are checked by independent audio tests; browser checks confirm generated download links."]
+}

@@ -4,6 +4,8 @@
 
 Copyright © John Nesky and contributors. MIT 许可证见 [LICENSE.md](LICENSE.md)。上游：https://github.com/johnnesky/beepbox。
 
+`yinya/voices.js` 中的钢琴、FM 电钢琴及钢弦吉他定义改编自上游 `editor/EditorConfig.ts` 的 grand piano、electric piano 2、steel guitar 预设；保留原作者 MIT 声明。音芽调整了发音、释放时间与能量校准参数。
+
 ## MP3 编码器
 
 音芽使用 LAME 的 JavaScript 移植版 **@breezystack/lamejs 1.2.7**（LGPL-3.0），由 LAME、lamejs 及其分支的贡献者维护。项目保留包内的原始声明与代码中的署名：

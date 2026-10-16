@@ -1,12 +1,13 @@
 import { Song, Synth } from '../synth/synth.ts';
-import { SongRenderer } from '../editor/SongRenderer.ts';
+import { AudioRenderer } from './render.js';
+import { VOICES, voiceInfo } from './voices.js';
 import { TRACKS, PRESETS, GROUP_SIZE, NOTE_LENGTHS, blank, preset, validate, resize, rangeHasNotes, copyGroup, copyBar, melodyAt, setMelodyNote, removeMelodyNote, encode, decode, songJSON, wavBuffer } from './model.js';
 import { PreviewPlayer } from './preview.js';
 import { PlaybackFollower, playbackPosition } from './playback.js';
 
 const $ = id => document.getElementById(id);
-const KEYS = { draft: 'yinya.v3.draft', library: 'yinya.v3.library', preferences: 'yinya.v1.preferences' };
-const LEGACY_KEYS = [{ draft: 'yinya.v2.draft', library: 'yinya.v2.library' }, { draft: 'yinya.v1.draft', library: 'yinya.v1.library' }];
+const KEYS = { draft: 'yinya.v4.draft', library: 'yinya.v4.library', preferences: 'yinya.v1.preferences' };
+const LEGACY_KEYS = [{ draft: 'yinya.v3.draft', library: 'yinya.v3.library' }, { draft: 'yinya.v2.draft', library: 'yinya.v2.library' }, { draft: 'yinya.v1.draft', library: 'yinya.v1.library' }];
 const clone = value => JSON.parse(JSON.stringify(value));
 const history = [], future = [];
 let state = preset('sprout'), activeId = null, selectedTrack = 0, library = [], storageWarning = '', exporting = false;
@@ -14,6 +15,7 @@ let synth = new Synth(), lastStep = -1, consumedShare = false;
 let exportJob = null;
 let pendingConfirmation = null;
 let selectedNote = null, newNoteLength = 1;
+let phraseActive = false;
 const preview = new PreviewPlayer();
 
 function read(key) {
@@ -34,6 +36,7 @@ const rawLibrary = savedLibrary === undefined ? readLegacy('library') : savedLib
 let migratedDraft = false;
 const preferences = read(KEYS.preferences);
 let clickPreview = preferences?.clickPreview !== false;
+let exportEnding = preferences?.exportEnding === 'loop' ? 'loop' : 'natural';
 const follower = new PlaybackFollower(preferences?.followPlayback !== false);
 function parseLibrary(raw) {
   const items = [];
@@ -119,12 +122,24 @@ function renderControls() {
   $('toggle-track').textContent = `这一层：${layer.enabled ? '开启' : '关闭'}`; $('toggle-track').setAttribute('aria-pressed', String(layer.enabled));
   $('volume').value = layer.volume; $('volume-value').textContent = layer.volume + '%';
   $('voice-label').hidden = selectedTrack !== 0; $('voice').value = state.voice || 'triangle';
+  $('voice-hint').textContent = voiceInfo(state.voice || 'triangle').hint;
+  $('voice-hint').hidden = selectedTrack !== 0;
+  $('export-ending').value = exportEnding; $('export-ending').disabled = exporting;
+  renderPhraseControls();
   renderNoteControls();
   $('undo').disabled = history.length === 0; $('redo').disabled = future.length === 0;
   $('library-count').textContent = library.length;
   $('click-preview').checked = clickPreview;
   $('grid-tip').textContent = selectedTrack === 0 ? '点色块选中，调整时长或删除；方向键移动，Delete 删除。' : synth.playing ? '点亮或移除格子，直接改变循环；方向键可移动焦点。' : clickPreview ? '点亮即可试听，再点一次移除；方向键可移动焦点。' : '点击添加，再点一次移除；开启「点击试听」可听见单音。';
   $('play').textContent = synth.playing ? '暂停播放' : '播放循环'; $('play').setAttribute('aria-pressed', String(synth.playing));
+}
+function renderPhraseControls() {
+  const start = Math.floor(follower.selectedBar / GROUP_SIZE) * GROUP_SIZE, melody = state.tracks[0];
+  $('phrase-tools').hidden = selectedTrack !== 0;
+  $('preview-phrase').textContent = phraseActive ? '停止试听' : '试听这段旋律';
+  $('preview-phrase').setAttribute('aria-pressed', String(phraseActive));
+  $('preview-phrase').disabled = exporting || !melody.enabled || melody.volume === 0 || !melody.bars.slice(start, start + GROUP_SIZE).some(bar => bar.some(n => n >= 0));
+  $('phrase-range').textContent = `第 ${start + 1}–${start + GROUP_SIZE} 小节 · 仅旋律`;
 }
 function currentNote() {
   if (!selectedNote || selectedTrack !== 0 || selectedNote.bar !== follower.selectedBar) return null;
@@ -147,7 +162,7 @@ function auditionMelody(message) {
   preview.play(state, 0, 7 - note.pitch, { bar: follower.selectedBar, step: note.start }).catch(() => status('音符已保留，浏览器未能启动声音。可按「播放循环」重试。'));
 }
 function selectBar(bar) {
-  preview.stop(); selectedNote = null; follower.select(bar, synth.playing); renderGrid(); renderNoteControls(); syncPlayback();
+  preview.stop(); selectedNote = null; follower.select(bar, synth.playing); renderGrid(); renderNoteControls(); renderPhraseControls(); syncPlayback();
   if (synth.playing) status(`正在查看第 ${bar + 1} 小节，音乐继续播放。按「回到播放位置」恢复跟随。`);
 }
 function renderBars(view = { ...playbackPosition(synth.playhead, state.barCount), playing: synth.playing }) {
@@ -251,7 +266,7 @@ function render() { follower.update(synth.playhead, synth.playing); renderTracks
 function stop() { preview.stop(); synth.pause(); follower.stop(); renderControls(); syncPlayback(); }
 function syncPlayback() {
   const oldBar = follower.selectedBar, view = follower.update(synth.playhead, synth.playing);
-  if (oldBar !== follower.selectedBar) { selectedNote = null; renderGrid(); renderNoteControls(); }
+  if (oldBar !== follower.selectedBar) { selectedNote = null; renderGrid(); renderNoteControls(); renderPhraseControls(); }
   renderBars(view);
   const active = view.playing && view.bar === follower.selectedBar;
   $('position').textContent = view.playing ? `播放 ${view.bar + 1} / ${state.barCount} 节 · ${view.beat + 1} 拍${active ? '' : ` · 查看第 ${follower.selectedBar + 1} 节`}` : `编辑第 ${follower.selectedBar + 1} 节 · 循环 ${state.barCount} 小节`;
@@ -271,7 +286,7 @@ $('play').addEventListener('click', () => {
   catch { synth.pause(); renderControls(); status('浏览器未能启动音频，请检查声音权限后再次按播放。'); }
 });
 function savePreferences(message) {
-  try { localStorage.setItem(KEYS.preferences, JSON.stringify({ clickPreview, followPlayback: follower.enabled })); status(message); }
+  try { localStorage.setItem(KEYS.preferences, JSON.stringify({ clickPreview, followPlayback: follower.enabled, exportEnding })); status(message); }
   catch { status(message + ' 这次设置未能保存到浏览器。'); }
 }
 $('click-preview').addEventListener('change', e => {
@@ -294,7 +309,19 @@ $('title').addEventListener('blur', () => { if (!state.title.trim()) { state.tit
 $('tempo').addEventListener('input', e => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 60 && n <= 180 && n !== state.tempo) { const next = clone(state); next.tempo = n; commit(next); } });
 $('tempo').addEventListener('change', e => { const n = Number(e.target.value); if (!Number.isInteger(n) || n < 60 || n > 180) { e.target.value = state.tempo; status('速度请设为 60–180 之间的整数。'); return; } const next = clone(state); next.tempo = n; commit(next); });
 $('volume').addEventListener('input', e => { const next = clone(state); next.tracks[selectedTrack].volume = Number(e.target.value); commit(next); });
-$('voice').addEventListener('change', e => { const next = clone(state); next.voice = e.target.value; commit(next, '旋律音色已更新。'); });
+$('voice').addEventListener('change', e => { const next = clone(state); next.voice = e.target.value; commit(next, `已换为「${voiceInfo(next.voice).name}」。点「试听这段旋律」比较效果，音符保持不变。`); });
+$('preview-phrase').addEventListener('click', () => {
+  if (phraseActive) { preview.stop(); status('已停止段落试听。'); return; }
+  stop();
+  const start = Math.floor(follower.selectedBar / GROUP_SIZE) * GROUP_SIZE;
+  status(`正在准备第 ${start + 1}–${start + GROUP_SIZE} 小节的旋律试听。`);
+  preview.playPhrase(state, start, active => {
+    const wasActive = phraseActive; phraseActive = active; renderPhraseControls();
+    if (wasActive && !active) status('段落试听已结束。');
+  }).then(started => { if (started) status(`正在试听第 ${start + 1}–${start + GROUP_SIZE} 小节 · ${voiceInfo(state.voice).name} · 仅旋律；可再次点击停止。`); })
+    .catch(() => status('无法开始段落试听，作品仍保留。请重试，或按「播放循环」。'));
+});
+$('export-ending').addEventListener('change', e => { exportEnding = e.target.value; savePreferences(exportEnding === 'natural' ? '导出采用自然收尾，保留乐器余音。' : '导出采用整段循环，严格按作品小节数截取。'); });
 $('note-length').addEventListener('change', e => {
   const duration = Number(e.target.value); if (!NOTE_LENGTHS.includes(duration)) return;
   newNoteLength = duration; const note = currentNote();
@@ -409,11 +436,11 @@ function encodeInWorker(left, right, job) {
   });
 }
 async function exportAudio(format) {
-  if (exporting) return; exporting = true; const snapshot = clone(state), renderer = new SongRenderer();
+  if (exporting) return; exporting = true; const snapshot = clone(state), renderer = new AudioRenderer(), ending = exportEnding;
   const job = { canceled: false, renderer, worker: null, reject: null }; exportJob = job;
   $('export').disabled = true; $('export-mp3').disabled = true; $('cancel-export').hidden = false; stop();
   try {
-    for await (const progress of renderer.generate(makeSong(snapshot), 44100, false, false, 1)) status(`正在合成 ${format.toUpperCase()} 的完整 ${snapshot.barCount} 小节：${Math.round(progress * 100)}%`);
+    for await (const progress of renderer.generate(snapshot, 44100, ending)) status(`正在合成 ${format.toUpperCase()} 的完整 ${snapshot.barCount} 小节：${Math.round(progress * 100)}%`);
     if (job.canceled) throw new DOMException('已取消', 'AbortError');
     const audio = format === 'mp3' ? await encodeInWorker(renderer.outputSamplesL, renderer.outputSamplesR, job) : wavBuffer(renderer.outputSamplesL, renderer.outputSamplesR, 44100);
     if (job.canceled) throw new DOMException('已取消', 'AbortError');
@@ -422,9 +449,9 @@ async function exportAudio(format) {
     const a = $('export-link');
     if (a.dataset.url) URL.revokeObjectURL(a.dataset.url);
     a.href = url; a.dataset.url = url; a.download = (snapshot.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_') || '音芽作品') + '.' + format; a.textContent = `下载 ${format.toUpperCase()}`; a.hidden = false;
-    status(`${format.toUpperCase()} 已生成：完整 ${snapshot.barCount} 小节${format === 'mp3' ? ' · 192 kbps 立体声' : ''}。点击「下载 ${format.toUpperCase()}」保存文件。`);
+    status(`${format.toUpperCase()} 已生成：完整 ${snapshot.barCount} 小节${renderer.tailSeconds ? ' · 含自然余音' : ''}${format === 'mp3' ? ' · 192 kbps 立体声' : ''}。点击「下载 ${format.toUpperCase()}」保存文件。`);
   } catch (error) { status(job.canceled || error?.name === 'AbortError' ? '已取消音频导出，作品内容保留。' : `${format.toUpperCase()} 导出失败，作品内容保留。${format === 'mp3' ? '可以尝试 WAV 导出或备份作品文件。' : '可以先备份作品文件。'}`); }
-  finally { job.worker?.terminate(); exportJob = null; exporting = false; $('export').disabled = false; $('export-mp3').disabled = false; $('cancel-export').hidden = true; }
+  finally { job.worker?.terminate(); exportJob = null; exporting = false; $('export').disabled = false; $('export-mp3').disabled = false; $('cancel-export').hidden = true; renderControls(); }
 }
 $('export').addEventListener('click', () => exportAudio('wav'));
 $('export-mp3').addEventListener('click', () => exportAudio('mp3'));
@@ -438,6 +465,7 @@ document.addEventListener('keydown', e => {
   if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(document.activeElement?.tagName) || document.querySelector('dialog[open]')) return;
   if (e.code === 'Space') { e.preventDefault(); $('play').click(); }
 });
+$('voice').replaceChildren(...VOICES.map(voice => { const option = document.createElement('option'); option.value = voice.id; option.textContent = voice.name; return option; }));
 renderPresets(); syncAudio(); render(); if (consumedShare || migratedDraft) draftSave();
 status(clickPreview ? `点亮一个格子试听，或按「播放循环」听完整 ${state.barCount} 小节。` : `点击试听已关闭；可以安静编辑，或按「播放循环」听完整 ${state.barCount} 小节。`);
 if (storageWarning) status(storageWarning); requestAnimationFrame(playbackFrame);

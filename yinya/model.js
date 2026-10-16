@@ -1,5 +1,6 @@
 // Original 音芽 interface and patterns. BeepBox audio code retains its MIT notice.
-export const VERSION = 3;
+import { voiceInfo, melodyInstrument } from './voices.js';
+export const VERSION = 4;
 export const NOTE_LENGTHS = [1, 2, 4, 8];
 export const BAR_COUNTS = [4, 8, 16];
 export const GROUP_SIZE = 4;
@@ -35,12 +36,13 @@ export function preset(id) {
   return s;
 }
 export function validate(value) {
-  if (!value || ![1, 2, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
+  if (!value || ![1, 2, 3, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
   // v1 always had four bars. Reading old data migrates a copy, never the original.
   const barCount = value.version === 1 ? 4 : value.barCount;
   const result = blank(value.title, barCount);
   result.tempo = value.tempo;
-  result.voice = ['triangle', 'rounded', 'square'].includes(value.voice) ? value.voice : 'triangle';
+  result.voice = value.version < VERSION ? (['triangle', 'rounded', 'square'].includes(value.voice) ? value.voice : 'triangle') : (value.voice ?? 'triangle');
+  voiceInfo(result.voice);
   result.tracks = value.tracks.map((t, index) => {
     if (!t || t.id !== TRACKS[index].id || typeof t.enabled !== 'boolean' || !Number.isInteger(t.volume) || t.volume < 0 || t.volume > 100 || !Array.isArray(t.bars) || t.bars.length !== barCount) throw new Error('音乐轨道数据不完整');
     const length = t.id === 'chords' ? 4 : 16;
@@ -51,7 +53,7 @@ export function validate(value) {
     });
     let durations;
     if (t.id === 'melody') {
-      if (value.version < VERSION) durations = bars.map(() => Array(16).fill(1));
+      if (value.version < 3) durations = bars.map(() => Array(16).fill(1));
       else {
         if (!Array.isArray(t.durations) || t.durations.length !== barCount) throw new Error('旋律时长数据不完整');
         durations = t.durations.map((lengths, index) => {
@@ -149,13 +151,15 @@ export function songJSON(value) {
   const s = validate(value);
   return { format: 'BeepBox', version: 9, scale: 'easy :)', key: 'C', introBars: 0, loopBars: s.barCount, beatsPerBar: 4, ticksPerBeat: 4, beatsPerMinute: s.tempo, channels: s.tracks.map((t, index) => ({
     type: t.id === 'drums' ? 'drum' : 'pitch',
-    instruments: [{ type: t.id === 'drums' ? 'drumset' : 'chip', wave: index === 0 ? s.voice : TRACKS[index].wave, volume: t.volume, effects: ['transition type', 'chord type'], transition: 'normal', chord: 'simultaneous', fadeInSeconds: 0, fadeOutTicks: -1,
+    instruments: [index === 0 ? melodyInstrument(s.voice, t.volume) : { type: t.id === 'drums' ? 'drumset' : 'chip', wave: TRACKS[index].wave, volume: t.volume, effects: ['transition type', 'chord type'], transition: 'normal', chord: 'simultaneous', fadeInSeconds: 0, fadeOutTicks: -1,
       ...(t.id === 'drums' ? { drums: Array.from({ length: 12 }, (_, drum) => ({ filterEnvelope: drum >= 8 ? 'twang 1' : 'twang 2', spectrum: Array.from({ length: 30 }, (_, band) => drum === 0 ? Math.max(0, 100 - band * 17) : drum === 4 ? (band > 3 && band < 17 ? 75 : 15) : drum === 8 ? (band > 17 ? 80 : 0) : 0) })) } : {}) }],
     patterns: t.bars.map((bar, barIndex) => ({ notes: bar.flatMap((n, step) => {
       if (n < 0 || (t.id === 'drums' && n === 0)) return [];
       if (t.id === 'drums') return [note([0, 4, 8].filter((_, bit) => n & (1 << bit)), step, step + 1, 70)];
       if (t.id === 'chords') return [note(CHORDS[n], step * 4, step * 4 + 4, 65)];
-      return [note([PITCHES[n] + (t.id === 'bass' ? 24 : 48)], step, step + (t.id === 'melody' ? t.durations[barIndex][step] : 1))];
+      const result = note([PITCHES[n] + (t.id === 'bass' ? 24 : 48)], step, step + (t.id === 'melody' ? t.durations[barIndex][step] : 1));
+      if (t.id === 'melody' && !voiceInfo(s.voice).legacy) result.points.forEach(point => { point.volume = voiceInfo(s.voice).noteVolume ?? 90; });
+      return [result];
     }) })),
     sequence: Array.from({ length: s.barCount }, (_, i) => i + 1),
   })) };

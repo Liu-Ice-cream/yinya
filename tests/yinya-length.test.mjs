@@ -9,7 +9,7 @@ test('legacy v1 JSON and links migrate without changing the original four-bar mu
   const original = structuredClone(legacy);
   const link = '#yinya=' + Buffer.from(JSON.stringify(legacy)).toString('base64url');
   const migrated = validate(legacy);
-  assert.equal(migrated.version, 3); assert.equal(migrated.barCount, 4);
+  assert.equal(migrated.version, 4); assert.equal(migrated.barCount, 4);
   assert.deepEqual(migrated.tracks, legacy.tracks);
   assert.deepEqual(decode(link), migrated);
   assert.deepEqual(legacy, original);

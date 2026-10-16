@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-16",
+  "version": "0.3.0",
+  "method": {
+    "sampleRate": 44100,
+    "tempo": 108,
+    "trackVolumePercent": 80,
+    "melodyPitchIndices": [
+      0,
+      3,
+      5,
+      7
+    ],
+    "noteLengthsSteps": [
+      1,
+      4,
+      8
+    ],
+    "statistic": "7th of 12 sorted gate RMS values (upper median), normalized PCM units",
+    "gate": "note onset through nominal note end, excluding release",
+    "limitation": "Signal-energy calibration is not a subjective equal-loudness measurement."
+  },
+  "observations": [
+    {
+      "id": "triangle",
+      "medianRms": 0.03002,
+      "minRms": 0.0261,
+      "maxRms": 0.03343,
+      "peak": 0.10917
+    },
+    {
+      "id": "rounded",
+      "medianRms": 0.03754,
+      "minRms": 0.03261,
+      "maxRms": 0.04183,
+      "peak": 0.10724
+    },
+    {
+      "id": "square",
+      "medianRms": 0.02425,
+      "minRms": 0.02062,
+      "maxRms": 0.02723,
+      "peak": 0.05693
+    },
+    {
+      "id": "piano-v1",
+      "medianRms": 0.03617,
+      "minRms": 0.02492,
+      "maxRms": 0.04389,
+      "peak": 0.10017
+    },
+    {
+      "id": "electric-piano-v1",
+      "medianRms": 0.03469,
+      "minRms": 0.02919,
+      "maxRms": 0.04228,
+      "peak": 0.07022
+    },
+    {
+      "id": "acoustic-guitar-v1",
+      "medianRms": 0.03294,
+      "minRms": 0.02335,
+      "maxRms": 0.04007,
+      "peak": 0.09689
+    }
+  ]
+}
