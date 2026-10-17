@@ -1,0 +1,50 @@
+{
+  "migration": {
+    "voice": "piano-v1",
+    "existingWorks": 6
+  },
+  "voices": [
+    {
+      "voice": "chord-electric-piano-v1",
+      "notes": 2
+    },
+    {
+      "voice": "chord-acoustic-guitar-v1",
+      "notes": 2
+    },
+    {
+      "voice": "rounded",
+      "notes": 2
+    },
+    {
+      "voice": "chord-piano-v1",
+      "notes": 2
+    }
+  ],
+  "version": "0.4.0",
+  "date": "2026-10-17",
+  "checks": {
+    "independentVoices": true,
+    "undoRedo": true,
+    "duetNaturalCompletion": true,
+    "modeAndTrackCancel": true,
+    "mutedMelodySoloDisabled": true,
+    "chordOnlyDuet": true,
+    "saveReloadBothVoices": true,
+    "shareRoundTripBothVoices": true,
+    "mp3DownloadLink": true,
+    "wavDownloadLink": true,
+    "mobileModeAndStop": true,
+    "mobileNoPageOverflow": true
+  },
+  "mobile": {
+    "viewport": [
+      390,
+      844
+    ],
+    "documentWidth": 375,
+    "scrollWidth": 375,
+    "physicalDevice": false
+  },
+  "consoleErrors": []
+}

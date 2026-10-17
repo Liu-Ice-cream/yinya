@@ -32,3 +32,24 @@ export function releaseSeconds(id, tempo) {
   const voice = voiceInfo(id);
   return voice.legacy ? .07 : voice.releaseBeats * 60 / tempo + .08;
 }
+
+// Chord revisions have their own levels; changing them never retunes a melody.
+export const CHORD_VOICES = freeze([
+  { id: 'rounded', name: '圆润波形', hint: '原有的温暖和声', legacy: true },
+  { id: 'chord-piano-v1', name: '钢琴', hint: '清晰柔和的钢琴和声 · 合成音色', melodyId: 'piano-v1', noteVolume: 67, volumeOffset: -20 },
+  { id: 'chord-electric-piano-v1', name: '电钢琴', hint: '温暖、有颗粒感的和声 · 合成音色', melodyId: 'electric-piano-v1', noteVolume: 67, volumeOffset: 0 },
+  { id: 'chord-acoustic-guitar-v1', name: '木吉他', hint: '同时拨响三音的钢弦和声 · 合成音色', melodyId: 'acoustic-guitar-v1', noteVolume: 67, volumeOffset: 0 },
+]);
+export function chordVoiceInfo(id) {
+  const voice = CHORD_VOICES.find(item => item.id === id);
+  if (!voice) throw new Error('无法识别这款和弦音色，请使用支持该音色的音芽版本');
+  return voice;
+}
+export function chordInstrument(id, volume) {
+  const voice = chordVoiceInfo(id);
+  return melodyInstrument(voice.legacy ? 'rounded' : voice.melodyId, volume + (voice.volumeOffset ?? 0));
+}
+export function chordReleaseSeconds(id, tempo) {
+  const voice = chordVoiceInfo(id);
+  return releaseSeconds(voice.legacy ? 'rounded' : voice.melodyId, tempo);
+}

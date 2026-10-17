@@ -1,6 +1,6 @@
 // Original 音芽 interface and patterns. BeepBox audio code retains its MIT notice.
-import { voiceInfo, melodyInstrument } from './voices.js';
-export const VERSION = 4;
+import { voiceInfo, melodyInstrument, chordVoiceInfo, chordInstrument } from './voices.js';
+export const VERSION = 5;
 export const NOTE_LENGTHS = [1, 2, 4, 8];
 export const BAR_COUNTS = [4, 8, 16];
 export const GROUP_SIZE = 4;
@@ -15,7 +15,7 @@ export const TRACKS = [
 function emptyBar(id) { return Array(id === 'chords' ? 4 : 16).fill(id === 'drums' ? 0 : -1); }
 export function blank(title = '我的第一段旋律', barCount = 4) {
   if (!BAR_COUNTS.includes(barCount)) throw new Error('请选择 4、8 或 16 小节');
-  return { version: VERSION, barCount, title, tempo: 108, tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)), ...(t.id === 'melody' ? { durations: Array.from({ length: barCount }, () => Array(16).fill(1)) } : {}) })) };
+  return { version: VERSION, barCount, title, tempo: 108, chordVoice: 'rounded', tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)), ...(t.id === 'melody' ? { durations: Array.from({ length: barCount }, () => Array(16).fill(1)) } : {}) })) };
 }
 export const PRESETS = [
   { id: 'sprout', name: '晴日发芽', detail: '轻快 · 108 BPM', tempo: 108, melody: [0, -1, 2, -1, 3, -1, 4, -1, 5, -1, 4, -1, 3, -1, 2, -1], chords: [0, 0, 1, 2], wave: 'triangle' },
@@ -36,13 +36,15 @@ export function preset(id) {
   return s;
 }
 export function validate(value) {
-  if (!value || ![1, 2, 3, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
+  if (!value || ![1, 2, 3, 4, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
   // v1 always had four bars. Reading old data migrates a copy, never the original.
   const barCount = value.version === 1 ? 4 : value.barCount;
   const result = blank(value.title, barCount);
   result.tempo = value.tempo;
-  result.voice = value.version < VERSION ? (['triangle', 'rounded', 'square'].includes(value.voice) ? value.voice : 'triangle') : (value.voice ?? 'triangle');
+  result.voice = value.version < 4 ? (['triangle', 'rounded', 'square'].includes(value.voice) ? value.voice : 'triangle') : (value.voice ?? 'triangle');
   voiceInfo(result.voice);
+  result.chordVoice = value.version < 5 ? 'rounded' : (value.chordVoice ?? 'rounded');
+  chordVoiceInfo(result.chordVoice);
   result.tracks = value.tracks.map((t, index) => {
     if (!t || t.id !== TRACKS[index].id || typeof t.enabled !== 'boolean' || !Number.isInteger(t.volume) || t.volume < 0 || t.volume > 100 || !Array.isArray(t.bars) || t.bars.length !== barCount) throw new Error('音乐轨道数据不完整');
     const length = t.id === 'chords' ? 4 : 16;
@@ -151,12 +153,16 @@ export function songJSON(value) {
   const s = validate(value);
   return { format: 'BeepBox', version: 9, scale: 'easy :)', key: 'C', introBars: 0, loopBars: s.barCount, beatsPerBar: 4, ticksPerBeat: 4, beatsPerMinute: s.tempo, channels: s.tracks.map((t, index) => ({
     type: t.id === 'drums' ? 'drum' : 'pitch',
-    instruments: [index === 0 ? melodyInstrument(s.voice, t.volume) : { type: t.id === 'drums' ? 'drumset' : 'chip', wave: TRACKS[index].wave, volume: t.volume, effects: ['transition type', 'chord type'], transition: 'normal', chord: 'simultaneous', fadeInSeconds: 0, fadeOutTicks: -1,
+    instruments: [index === 0 ? melodyInstrument(s.voice, t.volume) : index === 1 ? chordInstrument(s.chordVoice, t.volume) : { type: t.id === 'drums' ? 'drumset' : 'chip', wave: TRACKS[index].wave, volume: t.volume, effects: ['transition type', 'chord type'], transition: 'normal', chord: 'simultaneous', fadeInSeconds: 0, fadeOutTicks: -1,
       ...(t.id === 'drums' ? { drums: Array.from({ length: 12 }, (_, drum) => ({ filterEnvelope: drum >= 8 ? 'twang 1' : 'twang 2', spectrum: Array.from({ length: 30 }, (_, band) => drum === 0 ? Math.max(0, 100 - band * 17) : drum === 4 ? (band > 3 && band < 17 ? 75 : 15) : drum === 8 ? (band > 17 ? 80 : 0) : 0) })) } : {}) }],
     patterns: t.bars.map((bar, barIndex) => ({ notes: bar.flatMap((n, step) => {
       if (n < 0 || (t.id === 'drums' && n === 0)) return [];
       if (t.id === 'drums') return [note([0, 4, 8].filter((_, bit) => n & (1 << bit)), step, step + 1, 70)];
-      if (t.id === 'chords') return [note(CHORDS[n], step * 4, step * 4 + 4, 65)];
+      if (t.id === 'chords') {
+        const result = note(CHORDS[n], step * 4, step * 4 + 4, 65), voice = chordVoiceInfo(s.chordVoice);
+        if (!voice.legacy) result.points.forEach(point => { point.volume = voice.noteVolume; });
+        return [result];
+      }
       const result = note([PITCHES[n] + (t.id === 'bass' ? 24 : 48)], step, step + (t.id === 'melody' ? t.durations[barIndex][step] : 1));
       if (t.id === 'melody' && !voiceInfo(s.voice).legacy) result.points.forEach(point => { point.volume = voiceInfo(s.voice).noteVolume ?? 90; });
       return [result];

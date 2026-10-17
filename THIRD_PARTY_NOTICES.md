@@ -4,7 +4,7 @@
 
 Copyright © John Nesky and contributors. MIT 许可证见 [LICENSE.md](LICENSE.md)。上游：https://github.com/johnnesky/beepbox。
 
-`yinya/voices.js` 中的钢琴、FM 电钢琴及钢弦吉他定义改编自上游 `editor/EditorConfig.ts` 的 grand piano、electric piano 2、steel guitar 预设；保留原作者 MIT 声明。音芽调整了发音、释放时间与能量校准参数。
+`yinya/voices.js` 中的钢琴、FM 电钢琴及钢弦吉他定义改编自上游 `editor/EditorConfig.ts` 的 grand piano、electric piano 2、steel guitar 预设；保留原作者 MIT 声明。音芽调整了发音、释放时间与能量校准参数。旋律与和弦使用独立固定修订，和弦复用上述合成预设并单独校准伴奏强度。
 
 ## MP3 编码器
 

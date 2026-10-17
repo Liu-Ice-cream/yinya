@@ -27,7 +27,7 @@ test('selected melody previews use actual note durations at both tempo and sampl
     assert.deepEqual(state, before);
   }
   assert.throws(() => renderPreview(blank(), 0, 7, 44100, { bar: 0, step: 0 }));
-  assert.throws(() => renderPreview(preset('sprout'), 1, 0, 44100, { bar: 0, step: 0 }));
+  assert.throws(() => renderPreview(preset('sprout'), 2, 0, 44100, { bar: 0, step: 0 }));
 });
 
 test('long notes sustain in the last bar of actual WAV and MP3 exports, while short notes release', async () => {

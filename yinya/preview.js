@@ -1,7 +1,7 @@
 import { Song, Synth } from '../synth/synth.ts';
 import { Config } from '../synth/SynthConfig.ts';
 import { TRACKS, PITCHES, CHORDS, songJSON, validate, melodyAt } from './model.js';
-import { releaseSeconds, voiceInfo } from './voices.js';
+import { releaseSeconds, voiceInfo, chordReleaseSeconds, chordVoiceInfo } from './voices.js';
 import { AudioRenderer, phraseState, fadeEnd } from './render.js';
 
 export const PREVIEW_SECONDS = .32;
@@ -23,13 +23,21 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   const json = songJSON(state); json.channels = [json.channels[trackIndex]];
   let seconds = PREVIEW_SECONDS;
   if (notePosition !== null) {
-    if (trackIndex !== 0) throw new Error('长音试听仅支持旋律');
-    const note = melodyAt(state, notePosition.bar, notePosition.step);
-    if (!note || note.pitch !== 7 - row) throw new Error('试听旋律音符不存在');
-    const exported = json.channels[0].patterns[notePosition.bar].notes.find(n => n.points[0].tick === note.start);
-    const isolated = { ...exported, points: exported.points.map(point => ({ ...point, tick: point.tick - note.start })) };
+    if (![0, 1].includes(trackIndex)) throw new Error('按实际时长试听仅支持旋律与和弦');
+    let start, duration, release;
+    if (trackIndex === 0) {
+      const note = melodyAt(state, notePosition.bar, notePosition.step);
+      if (!note || note.pitch !== 7 - row) throw new Error('试听旋律音符不存在');
+      ({ start, duration } = note); release = releaseSeconds(state.voice, state.tempo);
+    } else {
+      const { bar, step } = notePosition;
+      if (!Number.isInteger(bar) || !Number.isInteger(step) || bar < 0 || bar >= state.barCount || step < 0 || step > 3 || layer.bars[bar][step] !== row) throw new Error('试听和弦不存在');
+      start = step * 4; duration = 4; release = chordReleaseSeconds(state.chordVoice, state.tempo);
+    }
+    const exported = json.channels[0].patterns[notePosition.bar].notes.find(n => n.points[0].tick === start);
+    const isolated = { ...exported, points: exported.points.map(point => ({ ...point, tick: point.tick - start })) };
     json.channels[0].patterns = [{ notes: [isolated] }]; json.channels[0].sequence = [1]; json.loopBars = 1;
-    seconds = note.duration * 60 / state.tempo / 4 + releaseSeconds(state.voice, state.tempo);
+    seconds = duration * 60 / state.tempo / 4 + release;
   }
   const song = new Song(); song.fromJsonObject(json);
   const synth = new Synth(song); synth.samplesPerSecond = sampleRate;
@@ -41,7 +49,7 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   const count = Math.ceil(seconds * sampleRate);
   const left = new Float32Array(count), right = new Float32Array(count);
   synth.synthesize(left, right, count, notePosition !== null);
-  if (notePosition !== null && !voiceInfo(state.voice).legacy) fadeEnd(left, right, Math.ceil(sampleRate * .02));
+  if (notePosition !== null && !(trackIndex === 0 ? voiceInfo(state.voice) : chordVoiceInfo(state.chordVoice)).legacy) fadeEnd(left, right, Math.ceil(sampleRate * .02));
   return { left, right, sampleRate };
 }
 
@@ -88,10 +96,9 @@ export class PreviewPlayer {
     catch (error) { source.onended = null; source.disconnect(); gain.disconnect(); throw error; }
     this.active = { source, gain };
   }
-  async playPhrase(value, start, changed = () => {}) {
-    this.stop(); const generation = this.generation, state = phraseState(value, start);
-    const melody = state.tracks[0];
-    if (!melody.enabled || melody.volume === 0 || !melody.bars.some(bar => bar.some(n => n >= 0))) return false;
+  async playPhrase(value, start, changed = () => {}, mode = 'melody') {
+    this.stop(); const generation = this.generation, state = phraseState(value, start, mode);
+    if (!state.tracks.slice(0, 2).some(track => track.enabled && track.volume > 0 && track.bars.some(bar => bar.some(n => n >= 0)))) return false;
     this.phraseChanged = changed; changed(true);
     try {
       const context = this.context || (this.context = this.createContext());

@@ -1,13 +1,13 @@
 import { Song, Synth } from '../synth/synth.ts';
 import { AudioRenderer } from './render.js';
-import { VOICES, voiceInfo } from './voices.js';
+import { VOICES, voiceInfo, CHORD_VOICES, chordVoiceInfo } from './voices.js';
 import { TRACKS, PRESETS, GROUP_SIZE, NOTE_LENGTHS, blank, preset, validate, resize, rangeHasNotes, copyGroup, copyBar, melodyAt, setMelodyNote, removeMelodyNote, encode, decode, songJSON, wavBuffer } from './model.js';
 import { PreviewPlayer } from './preview.js';
 import { PlaybackFollower, playbackPosition } from './playback.js';
 
 const $ = id => document.getElementById(id);
-const KEYS = { draft: 'yinya.v4.draft', library: 'yinya.v4.library', preferences: 'yinya.v1.preferences' };
-const LEGACY_KEYS = [{ draft: 'yinya.v3.draft', library: 'yinya.v3.library' }, { draft: 'yinya.v2.draft', library: 'yinya.v2.library' }, { draft: 'yinya.v1.draft', library: 'yinya.v1.library' }];
+const KEYS = { draft: 'yinya.v5.draft', library: 'yinya.v5.library', preferences: 'yinya.v1.preferences' };
+const LEGACY_KEYS = [{ draft: 'yinya.v4.draft', library: 'yinya.v4.library' }, { draft: 'yinya.v3.draft', library: 'yinya.v3.library' }, { draft: 'yinya.v2.draft', library: 'yinya.v2.library' }, { draft: 'yinya.v1.draft', library: 'yinya.v1.library' }];
 const clone = value => JSON.parse(JSON.stringify(value));
 const history = [], future = [];
 let state = preset('sprout'), activeId = null, selectedTrack = 0, library = [], storageWarning = '', exporting = false;
@@ -37,6 +37,7 @@ let migratedDraft = false;
 const preferences = read(KEYS.preferences);
 let clickPreview = preferences?.clickPreview !== false;
 let exportEnding = preferences?.exportEnding === 'loop' ? 'loop' : 'natural';
+let phraseMode = preferences?.phraseMode === 'duet' ? 'duet' : 'melody';
 const follower = new PlaybackFollower(preferences?.followPlayback !== false);
 function parseLibrary(raw) {
   const items = [];
@@ -124,6 +125,9 @@ function renderControls() {
   $('voice-label').hidden = selectedTrack !== 0; $('voice').value = state.voice || 'triangle';
   $('voice-hint').textContent = voiceInfo(state.voice || 'triangle').hint;
   $('voice-hint').hidden = selectedTrack !== 0;
+  $('chord-voice-label').hidden = selectedTrack !== 1; $('chord-voice').value = state.chordVoice || 'rounded';
+  $('chord-voice-hint').textContent = chordVoiceInfo(state.chordVoice || 'rounded').hint;
+  $('chord-voice-hint').hidden = selectedTrack !== 1;
   $('export-ending').value = exportEnding; $('export-ending').disabled = exporting;
   renderPhraseControls();
   renderNoteControls();
@@ -133,13 +137,16 @@ function renderControls() {
   $('grid-tip').textContent = selectedTrack === 0 ? '点色块选中，调整时长或删除；方向键移动，Delete 删除。' : synth.playing ? '点亮或移除格子，直接改变循环；方向键可移动焦点。' : clickPreview ? '点亮即可试听，再点一次移除；方向键可移动焦点。' : '点击添加，再点一次移除；开启「点击试听」可听见单音。';
   $('play').textContent = synth.playing ? '暂停播放' : '播放循环'; $('play').setAttribute('aria-pressed', String(synth.playing));
 }
+function phraseModeLabel() { return phraseMode === 'duet' ? '旋律＋和弦' : '仅旋律'; }
 function renderPhraseControls() {
-  const start = Math.floor(follower.selectedBar / GROUP_SIZE) * GROUP_SIZE, melody = state.tracks[0];
-  $('phrase-tools').hidden = selectedTrack !== 0;
-  $('preview-phrase').textContent = phraseActive ? '停止试听' : '试听这段旋律';
+  const start = Math.floor(follower.selectedBar / GROUP_SIZE) * GROUP_SIZE;
+  $('phrase-tools').hidden = selectedTrack > 1;
+  $('phrase-mode').value = phraseMode; $('phrase-mode').disabled = exporting;
+  $('preview-phrase').textContent = phraseActive ? '停止试听' : phraseMode === 'duet' ? '试听这段音乐' : '试听这段旋律';
   $('preview-phrase').setAttribute('aria-pressed', String(phraseActive));
-  $('preview-phrase').disabled = exporting || !melody.enabled || melody.volume === 0 || !melody.bars.slice(start, start + GROUP_SIZE).some(bar => bar.some(n => n >= 0));
-  $('phrase-range').textContent = `第 ${start + 1}–${start + GROUP_SIZE} 小节 · 仅旋律`;
+  const audible = state.tracks.slice(0, phraseMode === 'duet' ? 2 : 1).some(track => track.enabled && track.volume > 0 && track.bars.slice(start, start + GROUP_SIZE).some(bar => bar.some(n => n >= 0)));
+  $('preview-phrase').disabled = exporting || !audible;
+  $('phrase-range').textContent = `第 ${start + 1}–${start + GROUP_SIZE} 小节 · ${phraseModeLabel()}`;
 }
 function currentNote() {
   if (!selectedNote || selectedTrack !== 0 || selectedNote.bar !== follower.selectedBar) return null;
@@ -221,7 +228,7 @@ function editCell(row, col) {
   if (!added) { status(`已移除${label}。`); return; }
   if (!clickPreview || exporting) { status(`已添加${label}。${exporting ? '导出完成后可以试听。' : '点击试听已关闭。'}`); return; }
   if (!t.enabled || t.volume === 0) { status(`已添加${label}。${!t.enabled ? '这一层已关闭' : '这一层音量为零'}，暂不试听。`); return; }
-  preview.play(state, selectedTrack, row).then(started => {
+  preview.play(state, selectedTrack, row, selectedTrack === 1 && !chordVoiceInfo(state.chordVoice || 'rounded').legacy ? { bar: follower.selectedBar, step: col } : null).then(started => {
     if (started) status(`试听${label}。再点一次移除。`);
   }).catch(() => status(`已添加${label}，浏览器未能启动声音。可按「播放循环」重试。`));
 }
@@ -286,7 +293,7 @@ $('play').addEventListener('click', () => {
   catch { synth.pause(); renderControls(); status('浏览器未能启动音频，请检查声音权限后再次按播放。'); }
 });
 function savePreferences(message) {
-  try { localStorage.setItem(KEYS.preferences, JSON.stringify({ clickPreview, followPlayback: follower.enabled, exportEnding })); status(message); }
+  try { localStorage.setItem(KEYS.preferences, JSON.stringify({ clickPreview, followPlayback: follower.enabled, exportEnding, phraseMode })); status(message); }
   catch { status(message + ' 这次设置未能保存到浏览器。'); }
 }
 $('click-preview').addEventListener('change', e => {
@@ -309,16 +316,18 @@ $('title').addEventListener('blur', () => { if (!state.title.trim()) { state.tit
 $('tempo').addEventListener('input', e => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 60 && n <= 180 && n !== state.tempo) { const next = clone(state); next.tempo = n; commit(next); } });
 $('tempo').addEventListener('change', e => { const n = Number(e.target.value); if (!Number.isInteger(n) || n < 60 || n > 180) { e.target.value = state.tempo; status('速度请设为 60–180 之间的整数。'); return; } const next = clone(state); next.tempo = n; commit(next); });
 $('volume').addEventListener('input', e => { const next = clone(state); next.tracks[selectedTrack].volume = Number(e.target.value); commit(next); });
-$('voice').addEventListener('change', e => { const next = clone(state); next.voice = e.target.value; commit(next, `已换为「${voiceInfo(next.voice).name}」。点「试听这段旋律」比较效果，音符保持不变。`); });
+$('voice').addEventListener('change', e => { const next = clone(state); next.voice = e.target.value; commit(next, `已换为「${voiceInfo(next.voice).name}」。点段落试听比较效果，音符保持不变。`); });
+$('chord-voice').addEventListener('change', e => { const next = clone(state); next.chordVoice = e.target.value; commit(next, `和弦已换为「${chordVoiceInfo(next.chordVoice).name}」。选择「旋律＋和弦」试听搭配效果。`); });
+$('phrase-mode').addEventListener('change', e => { preview.stop(); phraseMode = e.target.value; renderPhraseControls(); savePreferences(`段落试听设为${phraseModeLabel()}。`); });
 $('preview-phrase').addEventListener('click', () => {
   if (phraseActive) { preview.stop(); status('已停止段落试听。'); return; }
   stop();
   const start = Math.floor(follower.selectedBar / GROUP_SIZE) * GROUP_SIZE;
-  status(`正在准备第 ${start + 1}–${start + GROUP_SIZE} 小节的旋律试听。`);
+  status(`正在准备第 ${start + 1}–${start + GROUP_SIZE} 小节的${phraseModeLabel()}试听。`);
   preview.playPhrase(state, start, active => {
     const wasActive = phraseActive; phraseActive = active; renderPhraseControls();
     if (wasActive && !active) status('段落试听已结束。');
-  }).then(started => { if (started) status(`正在试听第 ${start + 1}–${start + GROUP_SIZE} 小节 · ${voiceInfo(state.voice).name} · 仅旋律；可再次点击停止。`); })
+  }, phraseMode).then(started => { if (started) status(`正在试听第 ${start + 1}–${start + GROUP_SIZE} 小节 · ${phraseModeLabel()}；可再次点击停止。`); })
     .catch(() => status('无法开始段落试听，作品仍保留。请重试，或按「播放循环」。'));
 });
 $('export-ending').addEventListener('change', e => { exportEnding = e.target.value; savePreferences(exportEnding === 'natural' ? '导出采用自然收尾，保留乐器余音。' : '导出采用整段循环，严格按作品小节数截取。'); });
@@ -465,6 +474,7 @@ document.addEventListener('keydown', e => {
   if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(document.activeElement?.tagName) || document.querySelector('dialog[open]')) return;
   if (e.code === 'Space') { e.preventDefault(); $('play').click(); }
 });
+$('chord-voice').replaceChildren(...CHORD_VOICES.map(voice => { const option = document.createElement('option'); option.value = voice.id; option.textContent = voice.name; return option; }));
 $('voice').replaceChildren(...VOICES.map(voice => { const option = document.createElement('option'); option.value = voice.id; option.textContent = voice.name; return option; }));
 renderPresets(); syncAudio(); render(); if (consumedShare || migratedDraft) draftSave();
 status(clickPreview ? `点亮一个格子试听，或按「播放循环」听完整 ${state.barCount} 小节。` : `点击试听已关闭；可以安静编辑，或按「播放循环」听完整 ${state.barCount} 小节。`);
