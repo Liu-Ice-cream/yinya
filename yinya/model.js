@@ -1,6 +1,15 @@
 // Original 音芽 interface and patterns. BeepBox audio code retains its MIT notice.
 import { voiceInfo, melodyInstrument, chordVoiceInfo, chordInstrument } from './voices.js';
-export const VERSION = 5;
+export const VERSION = 6;
+export const CHORD_STYLES = Object.freeze([
+  Object.freeze({ id: 'block', name: '齐奏', hint: '每拍三个音同时响。' }),
+  Object.freeze({ id: 'arpeggio-v1', name: '分解', hint: '每拍按低 → 中 → 高 → 中，依次弹出四个短音。' }),
+]);
+export function chordStyleInfo(id) {
+  const style = CHORD_STYLES.find(item => item.id === id);
+  if (!style) throw new Error('无法识别这款和弦演奏方式，请使用支持该方式的音芽版本');
+  return style;
+}
 export const NOTE_LENGTHS = [1, 2, 4, 8];
 export const BAR_COUNTS = [4, 8, 16];
 export const GROUP_SIZE = 4;
@@ -15,7 +24,7 @@ export const TRACKS = [
 function emptyBar(id) { return Array(id === 'chords' ? 4 : 16).fill(id === 'drums' ? 0 : -1); }
 export function blank(title = '我的第一段旋律', barCount = 4) {
   if (!BAR_COUNTS.includes(barCount)) throw new Error('请选择 4、8 或 16 小节');
-  return { version: VERSION, barCount, title, tempo: 108, chordVoice: 'rounded', tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)), ...(t.id === 'melody' ? { durations: Array.from({ length: barCount }, () => Array(16).fill(1)) } : {}) })) };
+  return { version: VERSION, barCount, title, tempo: 108, chordVoice: 'rounded', chordStyle: 'block', tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)), ...(t.id === 'melody' ? { durations: Array.from({ length: barCount }, () => Array(16).fill(1)) } : {}) })) };
 }
 export const PRESETS = [
   { id: 'sprout', name: '晴日发芽', detail: '轻快 · 108 BPM', tempo: 108, melody: [0, -1, 2, -1, 3, -1, 4, -1, 5, -1, 4, -1, 3, -1, 2, -1], chords: [0, 0, 1, 2], wave: 'triangle' },
@@ -36,7 +45,7 @@ export function preset(id) {
   return s;
 }
 export function validate(value) {
-  if (!value || ![1, 2, 3, 4, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
+  if (!value || ![1, 2, 3, 4, 5, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
   // v1 always had four bars. Reading old data migrates a copy, never the original.
   const barCount = value.version === 1 ? 4 : value.barCount;
   const result = blank(value.title, barCount);
@@ -45,6 +54,8 @@ export function validate(value) {
   voiceInfo(result.voice);
   result.chordVoice = value.version < 5 ? 'rounded' : (value.chordVoice ?? 'rounded');
   chordVoiceInfo(result.chordVoice);
+  result.chordStyle = value.version < 6 ? 'block' : (value.chordStyle ?? 'block');
+  chordStyleInfo(result.chordStyle);
   result.tracks = value.tracks.map((t, index) => {
     if (!t || t.id !== TRACKS[index].id || typeof t.enabled !== 'boolean' || !Number.isInteger(t.volume) || t.volume < 0 || t.volume > 100 || !Array.isArray(t.bars) || t.bars.length !== barCount) throw new Error('音乐轨道数据不完整');
     const length = t.id === 'chords' ? 4 : 16;
@@ -149,6 +160,16 @@ export function decode(hash) {
   return validate(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)));
 }
 function note(pitches, start, end, volume = 90) { return { pitches, points: [{ tick: start, pitchBend: 0, volume }, { tick: end, pitchBend: 0, volume: 0 }] }; }
+// The grid stores one chord per beat; performance expands only at synthesis time.
+// Fixed revision IDs keep the saved rhythm stable across future additions.
+export function chordNotes(row, beat, voiceId, styleId = 'block') {
+  chordStyleInfo(styleId);
+  const voice = chordVoiceInfo(voiceId), pitches = CHORDS[row], start = beat * 4;
+  const notes = styleId === 'block' ? [note(pitches, start, start + 4, 65)] :
+    [0, 1, 2, 1].map((index, step) => note([pitches[index]], start + step, start + step + 1, 65));
+  if (!voice.legacy) notes.forEach(n => n.points.forEach(point => { point.volume = voice.noteVolume; }));
+  return notes;
+}
 export function songJSON(value) {
   const s = validate(value);
   return { format: 'BeepBox', version: 9, scale: 'easy :)', key: 'C', introBars: 0, loopBars: s.barCount, beatsPerBar: 4, ticksPerBeat: 4, beatsPerMinute: s.tempo, channels: s.tracks.map((t, index) => ({
@@ -158,11 +179,7 @@ export function songJSON(value) {
     patterns: t.bars.map((bar, barIndex) => ({ notes: bar.flatMap((n, step) => {
       if (n < 0 || (t.id === 'drums' && n === 0)) return [];
       if (t.id === 'drums') return [note([0, 4, 8].filter((_, bit) => n & (1 << bit)), step, step + 1, 70)];
-      if (t.id === 'chords') {
-        const result = note(CHORDS[n], step * 4, step * 4 + 4, 65), voice = chordVoiceInfo(s.chordVoice);
-        if (!voice.legacy) result.points.forEach(point => { point.volume = voice.noteVolume; });
-        return [result];
-      }
+      if (t.id === 'chords') return chordNotes(n, step, s.chordVoice, s.chordStyle);
       const result = note([PITCHES[n] + (t.id === 'bass' ? 24 : 48)], step, step + (t.id === 'melody' ? t.durations[barIndex][step] : 1));
       if (t.id === 'melody' && !voiceInfo(s.voice).legacy) result.points.forEach(point => { point.volume = voiceInfo(s.voice).noteVolume ?? 90; });
       return [result];

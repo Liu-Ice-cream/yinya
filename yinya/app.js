@@ -1,13 +1,13 @@
 import { Song, Synth } from '../synth/synth.ts';
 import { AudioRenderer } from './render.js';
 import { VOICES, voiceInfo, CHORD_VOICES, chordVoiceInfo } from './voices.js';
-import { TRACKS, PRESETS, GROUP_SIZE, NOTE_LENGTHS, blank, preset, validate, resize, rangeHasNotes, copyGroup, copyBar, melodyAt, setMelodyNote, removeMelodyNote, encode, decode, songJSON, wavBuffer } from './model.js';
+import { TRACKS, PRESETS, GROUP_SIZE, NOTE_LENGTHS, CHORD_STYLES, chordStyleInfo, blank, preset, validate, resize, rangeHasNotes, copyGroup, copyBar, melodyAt, setMelodyNote, removeMelodyNote, encode, decode, songJSON, wavBuffer } from './model.js';
 import { PreviewPlayer } from './preview.js';
 import { PlaybackFollower, playbackPosition } from './playback.js';
 
 const $ = id => document.getElementById(id);
-const KEYS = { draft: 'yinya.v5.draft', library: 'yinya.v5.library', preferences: 'yinya.v1.preferences' };
-const LEGACY_KEYS = [{ draft: 'yinya.v4.draft', library: 'yinya.v4.library' }, { draft: 'yinya.v3.draft', library: 'yinya.v3.library' }, { draft: 'yinya.v2.draft', library: 'yinya.v2.library' }, { draft: 'yinya.v1.draft', library: 'yinya.v1.library' }];
+const KEYS = { draft: 'yinya.v6.draft', library: 'yinya.v6.library', preferences: 'yinya.v1.preferences' };
+const LEGACY_KEYS = [{ draft: 'yinya.v5.draft', library: 'yinya.v5.library' }, { draft: 'yinya.v4.draft', library: 'yinya.v4.library' }, { draft: 'yinya.v3.draft', library: 'yinya.v3.library' }, { draft: 'yinya.v2.draft', library: 'yinya.v2.library' }, { draft: 'yinya.v1.draft', library: 'yinya.v1.library' }];
 const clone = value => JSON.parse(JSON.stringify(value));
 const history = [], future = [];
 let state = preset('sprout'), activeId = null, selectedTrack = 0, library = [], storageWarning = '', exporting = false;
@@ -126,8 +126,10 @@ function renderControls() {
   $('voice-hint').textContent = voiceInfo(state.voice || 'triangle').hint;
   $('voice-hint').hidden = selectedTrack !== 0;
   $('chord-voice-label').hidden = selectedTrack !== 1; $('chord-voice').value = state.chordVoice || 'rounded';
-  $('chord-voice-hint').textContent = chordVoiceInfo(state.chordVoice || 'rounded').hint;
+  $('chord-voice-hint').textContent = (state.chordVoice === 'chord-acoustic-guitar-v1' && state.chordStyle !== 'block') ? '依次拨弦的钢弦和声 · 合成音色' : chordVoiceInfo(state.chordVoice || 'rounded').hint;
   $('chord-voice-hint').hidden = selectedTrack !== 1;
+  $('chord-style-label').hidden = selectedTrack !== 1; $('chord-style').value = state.chordStyle || 'block';
+  $('chord-style-hint').hidden = selectedTrack !== 1; $('chord-style-hint').textContent = chordStyleInfo(state.chordStyle || 'block').hint;
   $('export-ending').value = exportEnding; $('export-ending').disabled = exporting;
   renderPhraseControls();
   renderNoteControls();
@@ -228,7 +230,7 @@ function editCell(row, col) {
   if (!added) { status(`已移除${label}。`); return; }
   if (!clickPreview || exporting) { status(`已添加${label}。${exporting ? '导出完成后可以试听。' : '点击试听已关闭。'}`); return; }
   if (!t.enabled || t.volume === 0) { status(`已添加${label}。${!t.enabled ? '这一层已关闭' : '这一层音量为零'}，暂不试听。`); return; }
-  preview.play(state, selectedTrack, row, selectedTrack === 1 && !chordVoiceInfo(state.chordVoice || 'rounded').legacy ? { bar: follower.selectedBar, step: col } : null).then(started => {
+  preview.play(state, selectedTrack, row, selectedTrack === 1 && (!chordVoiceInfo(state.chordVoice || 'rounded').legacy || state.chordStyle !== 'block') ? { bar: follower.selectedBar, step: col } : null).then(started => {
     if (started) status(`试听${label}。再点一次移除。`);
   }).catch(() => status(`已添加${label}，浏览器未能启动声音。可按「播放循环」重试。`));
 }
@@ -318,6 +320,7 @@ $('tempo').addEventListener('change', e => { const n = Number(e.target.value); i
 $('volume').addEventListener('input', e => { const next = clone(state); next.tracks[selectedTrack].volume = Number(e.target.value); commit(next); });
 $('voice').addEventListener('change', e => { const next = clone(state); next.voice = e.target.value; commit(next, `已换为「${voiceInfo(next.voice).name}」。点段落试听比较效果，音符保持不变。`); });
 $('chord-voice').addEventListener('change', e => { const next = clone(state); next.chordVoice = e.target.value; commit(next, `和弦已换为「${chordVoiceInfo(next.chordVoice).name}」。选择「旋律＋和弦」试听搭配效果。`); });
+$('chord-style').addEventListener('change', e => { const next = clone(state); next.chordStyle = e.target.value; commit(next, `和弦改为${chordStyleInfo(next.chordStyle).name}。${chordStyleInfo(next.chordStyle).hint}选择「旋律＋和弦」试听效果。`); });
 $('phrase-mode').addEventListener('change', e => { preview.stop(); phraseMode = e.target.value; renderPhraseControls(); savePreferences(`段落试听设为${phraseModeLabel()}。`); });
 $('preview-phrase').addEventListener('click', () => {
   if (phraseActive) { preview.stop(); status('已停止段落试听。'); return; }
@@ -474,6 +477,7 @@ document.addEventListener('keydown', e => {
   if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(document.activeElement?.tagName) || document.querySelector('dialog[open]')) return;
   if (e.code === 'Space') { e.preventDefault(); $('play').click(); }
 });
+$('chord-style').replaceChildren(...CHORD_STYLES.map(style => { const option = document.createElement('option'); option.value = style.id; option.textContent = style.name; return option; }));
 $('chord-voice').replaceChildren(...CHORD_VOICES.map(voice => { const option = document.createElement('option'); option.value = voice.id; option.textContent = voice.name; return option; }));
 $('voice').replaceChildren(...VOICES.map(voice => { const option = document.createElement('option'); option.value = voice.id; option.textContent = voice.name; return option; }));
 renderPresets(); syncAudio(); render(); if (consumedShare || migratedDraft) draftSave();

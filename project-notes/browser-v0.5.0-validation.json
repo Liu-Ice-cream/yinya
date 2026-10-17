@@ -1,0 +1,33 @@
+{
+  "version": "0.5.0",
+  "date": "2026-10-17",
+  "oldWorksPreserved": 7,
+  "migration": {
+    "oldVersion": 5,
+    "defaultStyle": "block",
+    "melody": "piano-v1",
+    "chordVoice": "chord-acoustic-guitar-v1"
+  },
+  "checks": {
+    "styleUndoRedo": true,
+    "chordGridUnchanged": true,
+    "styleChangeCancelsPreview": true,
+    "clickPreview": true,
+    "duetNaturalCompletion": true,
+    "fullLoop": true,
+    "saveReloadStyleAndVoices": true,
+    "shareStyleRoundTrip": true,
+    "mp3DownloadLink": true,
+    "wavLoopDownloadLink": true,
+    "mobileStyleSelection": true,
+    "mobilePreviewStartStop": true
+  },
+  "mobile": {
+    "width": 390,
+    "height": 844,
+    "documentWidth": 375,
+    "scrollWidth": 375,
+    "physicalDevice": false
+  },
+  "consoleErrors": []
+}

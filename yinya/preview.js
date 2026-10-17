@@ -1,6 +1,6 @@
 import { Song, Synth } from '../synth/synth.ts';
 import { Config } from '../synth/SynthConfig.ts';
-import { TRACKS, PITCHES, CHORDS, songJSON, validate, melodyAt } from './model.js';
+import { TRACKS, PITCHES, CHORDS, songJSON, validate, melodyAt, chordNotes } from './model.js';
 import { releaseSeconds, voiceInfo, chordReleaseSeconds, chordVoiceInfo } from './voices.js';
 import { AudioRenderer, phraseState, fadeEnd } from './render.js';
 
@@ -22,34 +22,38 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   if (!layer.enabled || layer.volume === 0) return null;
   const json = songJSON(state); json.channels = [json.channels[trackIndex]];
   let seconds = PREVIEW_SECONDS;
-  if (notePosition !== null) {
+  const sequencePreview = notePosition !== null || (trackIndex === 1 && state.chordStyle !== 'block');
+  if (sequencePreview) {
     if (![0, 1].includes(trackIndex)) throw new Error('按实际时长试听仅支持旋律与和弦');
-    let start, duration, release;
+    let start, duration, release, notes;
     if (trackIndex === 0) {
       const note = melodyAt(state, notePosition.bar, notePosition.step);
       if (!note || note.pitch !== 7 - row) throw new Error('试听旋律音符不存在');
       ({ start, duration } = note); release = releaseSeconds(state.voice, state.tempo);
+    } else if (notePosition === null) {
+      start = 0; duration = 4; release = chordReleaseSeconds(state.chordVoice, state.tempo);
+      notes = chordNotes(row, 0, state.chordVoice, state.chordStyle);
     } else {
       const { bar, step } = notePosition;
       if (!Number.isInteger(bar) || !Number.isInteger(step) || bar < 0 || bar >= state.barCount || step < 0 || step > 3 || layer.bars[bar][step] !== row) throw new Error('试听和弦不存在');
       start = step * 4; duration = 4; release = chordReleaseSeconds(state.chordVoice, state.tempo);
     }
-    const exported = json.channels[0].patterns[notePosition.bar].notes.find(n => n.points[0].tick === start);
-    const isolated = { ...exported, points: exported.points.map(point => ({ ...point, tick: point.tick - start })) };
-    json.channels[0].patterns = [{ notes: [isolated] }]; json.channels[0].sequence = [1]; json.loopBars = 1;
+    notes ??= json.channels[0].patterns[notePosition.bar].notes.filter(n => n.points[0].tick >= start && n.points[0].tick < start + duration);
+    const isolated = notes.map(n => ({ ...n, points: n.points.map(point => ({ ...point, tick: point.tick - start })) }));
+    json.channels[0].patterns = [{ notes: isolated }]; json.channels[0].sequence = [1]; json.loopBars = 1;
     seconds = duration * 60 / state.tempo / 4 + release;
   }
   const song = new Song(); song.fromJsonObject(json);
   const synth = new Synth(song); synth.samplesPerSecond = sampleRate;
-  if (notePosition === null) {
+  if (!sequencePreview) {
     synth.liveInputChannel = 0; synth.liveInputInstruments = [0];
     synth.liveInputPitches = pitches; synth.liveInputStarted = true;
     synth.liveInputDuration = Math.ceil(HOLD_SECONDS * state.tempo / 60 * Config.partsPerBeat);
   } else synth.loopRepeatCount = 0;
   const count = Math.ceil(seconds * sampleRate);
   const left = new Float32Array(count), right = new Float32Array(count);
-  synth.synthesize(left, right, count, notePosition !== null);
-  if (notePosition !== null && !(trackIndex === 0 ? voiceInfo(state.voice) : chordVoiceInfo(state.chordVoice)).legacy) fadeEnd(left, right, Math.ceil(sampleRate * .02));
+  synth.synthesize(left, right, count, sequencePreview);
+  if (sequencePreview && (!(trackIndex === 0 ? voiceInfo(state.voice) : chordVoiceInfo(state.chordVoice)).legacy || (trackIndex === 1 && state.chordStyle !== 'block'))) fadeEnd(left, right, Math.ceil(sampleRate * .02));
   return { left, right, sampleRate };
 }
 
