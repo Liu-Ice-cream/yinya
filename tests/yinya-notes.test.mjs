@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { blank, preset, validate, setMelodyNote, removeMelodyNote, melodyAt, copyBar, copyGroup, resize, encode, decode, songJSON } from '../yinya/model.js';
+import { MAX_BACKUP_BYTES, parseBackup, blank, preset, validate, setMelodyNote, removeMelodyNote, melodyAt, copyBar, copyGroup, resize, encode, decode, songJSON } from '../yinya/model.js';
 
 test('v1 and v2 migration keeps adjacent repeated notes separate with their exact original timing', () => {
   for (const version of [1, 2]) {
@@ -9,7 +9,7 @@ test('v1 and v2 migration keeps adjacent repeated notes separate with their exac
     delete old.tracks[0].durations;
     old.tracks[0].bars[0][0] = 3; old.tracks[0].bars[0][1] = 3;
     const before = structuredClone(old), migrated = validate(old);
-    assert.equal(migrated.version, 6);
+    assert.equal(migrated.version, 7);
     assert.deepEqual(migrated.tracks[0].durations[0], Array(16).fill(1));
     assert.deepEqual(migrated.tracks[0].bars, old.tracks[0].bars);
     const notes = songJSON(migrated).channels[0].patterns[0].notes;
@@ -58,7 +58,7 @@ test('copy, group copy, repeat expansion and shrinking keep durations independen
   assert.deepEqual(resize(expanded, 4), state);
   assert.deepEqual(decode(encode(expanded)), expanded);
   assert.deepEqual(validate(JSON.parse(JSON.stringify(expanded))), expanded);
-  assert.ok(Buffer.byteLength(JSON.stringify(expanded, null, 2)) <= 20000);
+  assert.ok(Buffer.byteLength(JSON.stringify(expanded, null, 2)) <= MAX_BACKUP_BYTES);
   assert.ok(encode(expanded).length <= 20000);
   copied.tracks[0].durations[12][0] = 4; assert.equal(copied.tracks[0].durations[0][0], 8);
 });

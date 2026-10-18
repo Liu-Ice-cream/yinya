@@ -1,6 +1,6 @@
 // Original 音芽 interface and patterns. BeepBox audio code retains its MIT notice.
 import { voiceInfo, melodyInstrument, chordVoiceInfo, chordInstrument } from './voices.js';
-export const VERSION = 6;
+export const VERSION = 7;
 export const CHORD_STYLES = Object.freeze([
   Object.freeze({ id: 'block', name: '齐奏', hint: '每拍三个音同时响。' }),
   Object.freeze({ id: 'arpeggio-v1', name: '分解', hint: '每拍按低 → 中 → 高 → 中，依次弹出四个短音。' }),
@@ -10,6 +10,8 @@ export function chordStyleInfo(id) {
   if (!style) throw new Error('无法识别这款和弦演奏方式，请使用支持该方式的音芽版本');
   return style;
 }
+export const MAX_BACKUP_BYTES = 32 * 1024;
+export const LONG_NOTE_TRACKS = Object.freeze([0, 2]);
 export const NOTE_LENGTHS = [1, 2, 4, 8];
 export const BAR_COUNTS = [4, 8, 16];
 export const GROUP_SIZE = 4;
@@ -24,7 +26,7 @@ export const TRACKS = [
 function emptyBar(id) { return Array(id === 'chords' ? 4 : 16).fill(id === 'drums' ? 0 : -1); }
 export function blank(title = '我的第一段旋律', barCount = 4) {
   if (!BAR_COUNTS.includes(barCount)) throw new Error('请选择 4、8 或 16 小节');
-  return { version: VERSION, barCount, title, tempo: 108, chordVoice: 'rounded', chordStyle: 'block', tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)), ...(t.id === 'melody' ? { durations: Array.from({ length: barCount }, () => Array(16).fill(1)) } : {}) })) };
+  return { version: VERSION, barCount, title, tempo: 108, chordVoice: 'rounded', chordStyle: 'block', tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)), ...(['melody', 'bass'].includes(t.id) ? { durations: Array.from({ length: barCount }, () => Array(16).fill(1)) } : {}) })) };
 }
 export const PRESETS = [
   { id: 'sprout', name: '晴日发芽', detail: '轻快 · 108 BPM', tempo: 108, melody: [0, -1, 2, -1, 3, -1, 4, -1, 5, -1, 4, -1, 3, -1, 2, -1], chords: [0, 0, 1, 2], wave: 'triangle' },
@@ -45,7 +47,7 @@ export function preset(id) {
   return s;
 }
 export function validate(value) {
-  if (!value || ![1, 2, 3, 4, 5, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
+  if (!value || ![1, 2, 3, 4, 5, 6, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
   // v1 always had four bars. Reading old data migrates a copy, never the original.
   const barCount = value.version === 1 ? 4 : value.barCount;
   const result = blank(value.title, barCount);
@@ -65,18 +67,19 @@ export function validate(value) {
       return [...bar];
     });
     let durations;
-    if (t.id === 'melody') {
-      if (value.version < 3) durations = bars.map(() => Array(16).fill(1));
+    const trackName = TRACKS[index].name;
+    if (LONG_NOTE_TRACKS.includes(index)) {
+      if (value.version < (t.id === 'melody' ? 3 : 7)) durations = bars.map(() => Array(16).fill(1));
       else {
-        if (!Array.isArray(t.durations) || t.durations.length !== barCount) throw new Error('旋律时长数据不完整');
+        if (!Array.isArray(t.durations) || t.durations.length !== barCount) throw new Error(`${trackName}时长数据不完整`);
         durations = t.durations.map((lengths, index) => {
-          if (!Array.isArray(lengths) || lengths.length !== 16) throw new Error('旋律时长数据不完整');
+          if (!Array.isArray(lengths) || lengths.length !== 16) throw new Error(`${trackName}时长数据不完整`);
           let end = 0;
           for (let step = 0; step < 16; step++) {
             const length = lengths[step];
-            if (!Number.isInteger(length) || length < 1 || length > 8 || (bars[index][step] < 0 && length !== 1)) throw new Error('旋律时长超出支持范围');
+            if (!Number.isInteger(length) || length < 1 || length > 8 || (bars[index][step] < 0 && length !== 1)) throw new Error(`${trackName}时长超出支持范围`);
             if (bars[index][step] >= 0) {
-              if (step < end || step + length > 16) throw new Error('旋律音符重叠或超出小节');
+              if (step < end || step + length > 16) throw new Error(`${trackName}音符重叠或超出小节`);
               end = step + length;
             }
           }
@@ -119,34 +122,43 @@ export function copyGroup(value, source, destination) {
   return state;
 }
 // The grid contains note starts; held cells resolve to their owning note.
-export function melodyAt(value, barIndex, step) {
-  const track = value.tracks[0];
-  if (!Number.isInteger(barIndex) || barIndex < 0 || barIndex >= value.barCount || !Number.isInteger(step) || step < 0 || step >= 16) throw new Error('旋律位置无效');
+export function pitchedNoteAt(value, trackIndex, barIndex, step) {
+  if (!LONG_NOTE_TRACKS.includes(trackIndex)) throw new Error('该声部不支持长音编辑');
+  const track = value.tracks[trackIndex];
+  if (!Number.isInteger(barIndex) || barIndex < 0 || barIndex >= value.barCount || !Number.isInteger(step) || step < 0 || step >= 16) throw new Error('音符位置无效');
   const bar = track.bars[barIndex], lengths = track.durations[barIndex];
   for (let start = step; start >= 0; start--) if (bar[start] >= 0) return start + lengths[start] > step ? { start, pitch: bar[start], duration: lengths[start] } : null;
   return null;
 }
-export function setMelodyNote(value, barIndex, step, pitch, duration) {
-  if (!Number.isInteger(pitch) || pitch < 0 || pitch > 7 || !NOTE_LENGTHS.includes(duration)) throw new Error('旋律音高或时长无效');
-  const state = validate(value), previous = melodyAt(state, barIndex, step);
-  const track = state.tracks[0], bar = track.bars[barIndex], lengths = track.durations[barIndex];
+export function setPitchedNote(value, trackIndex, barIndex, step, pitch, duration) {
+  if (!Number.isInteger(pitch) || pitch < 0 || pitch > 7 || !NOTE_LENGTHS.includes(duration)) throw new Error('音高或时长无效');
+  const state = validate(value), previous = pitchedNoteAt(state, trackIndex, barIndex, step);
+  const track = state.tracks[trackIndex], bar = track.bars[barIndex], lengths = track.durations[barIndex];
   if (previous && previous.start < step) lengths[previous.start] = step - previous.start;
   const next = bar.findIndex((n, i) => i > step && n >= 0);
   const actual = Math.min(duration, (next < 0 ? 16 : next) - step);
   bar[step] = pitch; lengths[step] = actual;
   return { state, start: step, duration: actual, limited: actual !== duration };
 }
-export function removeMelodyNote(value, barIndex, step) {
-  const state = validate(value), note = melodyAt(state, barIndex, step);
-  if (note) { state.tracks[0].bars[barIndex][note.start] = -1; state.tracks[0].durations[barIndex][note.start] = 1; }
+export function removePitchedNote(value, trackIndex, barIndex, step) {
+  const state = validate(value), note = pitchedNoteAt(state, trackIndex, barIndex, step);
+  if (note) { state.tracks[trackIndex].bars[barIndex][note.start] = -1; state.tracks[trackIndex].durations[barIndex][note.start] = 1; }
   return state;
 }
+// Keep the melody API for callers that only edit the lead voice.
+export function melodyAt(value, barIndex, step) { return pitchedNoteAt(value, 0, barIndex, step); }
+export function setMelodyNote(value, barIndex, step, pitch, duration) { return setPitchedNote(value, 0, barIndex, step, pitch, duration); }
+export function removeMelodyNote(value, barIndex, step) { return removePitchedNote(value, 0, barIndex, step); }
 export function copyBar(value, trackIndex, source, destination) {
   const state = validate(value);
   if (!Number.isInteger(trackIndex) || trackIndex < 0 || trackIndex > 3 || ![source, destination].every(i => Number.isInteger(i) && i >= 0 && i < state.barCount)) throw new Error('复制小节位置无效');
   const track = state.tracks[trackIndex]; track.bars[destination] = [...track.bars[source]];
   if (track.durations) track.durations[destination] = [...track.durations[source]];
   return state;
+}
+export function parseBackup(text) {
+  if (typeof text !== 'string' || new TextEncoder().encode(text).byteLength > MAX_BACKUP_BYTES) throw new Error('备份文件超过 32 KB');
+  return validate(JSON.parse(text));
 }
 export function encode(state) {
   const bytes = new TextEncoder().encode(JSON.stringify(validate(state)));
@@ -180,7 +192,7 @@ export function songJSON(value) {
       if (n < 0 || (t.id === 'drums' && n === 0)) return [];
       if (t.id === 'drums') return [note([0, 4, 8].filter((_, bit) => n & (1 << bit)), step, step + 1, 70)];
       if (t.id === 'chords') return chordNotes(n, step, s.chordVoice, s.chordStyle);
-      const result = note([PITCHES[n] + (t.id === 'bass' ? 24 : 48)], step, step + (t.id === 'melody' ? t.durations[barIndex][step] : 1));
+      const result = note([PITCHES[n] + (t.id === 'bass' ? 24 : 48)], step, step + t.durations[barIndex][step]);
       if (t.id === 'melody' && !voiceInfo(s.voice).legacy) result.points.forEach(point => { point.volume = voiceInfo(s.voice).noteVolume ?? 90; });
       return [result];
     }) })),

@@ -1,6 +1,6 @@
 import { Song, Synth } from '../synth/synth.ts';
 import { Config } from '../synth/SynthConfig.ts';
-import { TRACKS, PITCHES, CHORDS, songJSON, validate, melodyAt, chordNotes } from './model.js';
+import { TRACKS, PITCHES, CHORDS, songJSON, validate, pitchedNoteAt, LONG_NOTE_TRACKS, chordNotes } from './model.js';
 import { releaseSeconds, voiceInfo, chordReleaseSeconds, chordVoiceInfo } from './voices.js';
 import { AudioRenderer, phraseState, fadeEnd } from './render.js';
 
@@ -24,12 +24,12 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   let seconds = PREVIEW_SECONDS;
   const sequencePreview = notePosition !== null || (trackIndex === 1 && state.chordStyle !== 'block');
   if (sequencePreview) {
-    if (![0, 1].includes(trackIndex)) throw new Error('按实际时长试听仅支持旋律与和弦');
+    if (![0, 1, 2].includes(trackIndex)) throw new Error('按实际时长试听仅支持旋律、和弦与贝斯');
     let start, duration, release, notes;
-    if (trackIndex === 0) {
-      const note = melodyAt(state, notePosition.bar, notePosition.step);
-      if (!note || note.pitch !== 7 - row) throw new Error('试听旋律音符不存在');
-      ({ start, duration } = note); release = releaseSeconds(state.voice, state.tempo);
+    if (LONG_NOTE_TRACKS.includes(trackIndex)) {
+      const note = pitchedNoteAt(state, trackIndex, notePosition.bar, notePosition.step);
+      if (!note || note.pitch !== 7 - row) throw new Error('试听音符不存在');
+      ({ start, duration } = note); release = trackIndex === 0 ? releaseSeconds(state.voice, state.tempo) : .07;
     } else if (notePosition === null) {
       start = 0; duration = 4; release = chordReleaseSeconds(state.chordVoice, state.tempo);
       notes = chordNotes(row, 0, state.chordVoice, state.chordStyle);
@@ -53,7 +53,8 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   const count = Math.ceil(seconds * sampleRate);
   const left = new Float32Array(count), right = new Float32Array(count);
   synth.synthesize(left, right, count, sequencePreview);
-  if (sequencePreview && (!(trackIndex === 0 ? voiceInfo(state.voice) : chordVoiceInfo(state.chordVoice)).legacy || (trackIndex === 1 && state.chordStyle !== 'block'))) fadeEnd(left, right, Math.ceil(sampleRate * .02));
+  const shapedEnding = trackIndex === 0 ? !voiceInfo(state.voice).legacy : trackIndex === 1 && (!chordVoiceInfo(state.chordVoice).legacy || state.chordStyle !== 'block');
+  if (sequencePreview && shapedEnding) fadeEnd(left, right, Math.ceil(sampleRate * .02));
   return { left, right, sampleRate };
 }
 

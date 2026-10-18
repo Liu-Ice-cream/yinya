@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { blank, preset, validate, resize, copyGroup, rangeHasNotes, encode, decode, songJSON } from '../yinya/model.js';
+import { MAX_BACKUP_BYTES, parseBackup, blank, preset, validate, resize, copyGroup, rangeHasNotes, encode, decode, songJSON } from '../yinya/model.js';
 import { PlaybackFollower, playbackPosition } from '../yinya/playback.js';
 
 test('legacy v1 JSON and links migrate without changing the original four-bar music', () => {
@@ -9,7 +9,7 @@ test('legacy v1 JSON and links migrate without changing the original four-bar mu
   const original = structuredClone(legacy);
   const link = '#yinya=' + Buffer.from(JSON.stringify(legacy)).toString('base64url');
   const migrated = validate(legacy);
-  assert.equal(migrated.version, 6); assert.equal(migrated.barCount, 4);
+  assert.equal(migrated.version, 7); assert.equal(migrated.barCount, 4);
   assert.deepEqual(migrated.tracks, legacy.tracks);
   assert.deepEqual(decode(link), migrated);
   assert.deepEqual(legacy, original);
@@ -24,7 +24,7 @@ test('all supported lengths preserve full data through JSON and links, and rejec
     state.tracks[0].bars[count - 1][15] = 7;
     assert.deepEqual(decode(encode(state)), state);
     assert.deepEqual(validate(JSON.parse(JSON.stringify(state))), state);
-    assert.ok(Buffer.byteLength(JSON.stringify(state, null, 2)) <= 20000, 'app can import its own backup');
+    assert.ok(Buffer.byteLength(JSON.stringify(state, null, 2)) <= MAX_BACKUP_BYTES, 'app can import its own backup');
     assert.ok(encode(state).length <= 20000, 'app can decode its own share link');
     const json = songJSON(state);
     assert.equal(json.loopBars, count);

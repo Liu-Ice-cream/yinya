@@ -1,0 +1,41 @@
+{
+  "version": "0.6.0",
+  "date": "2026-10-18",
+  "oldWorksPreserved": 8,
+  "checks": {
+    "oldChordStylePreserved": true,
+    "bassEightStepNote": true,
+    "heldCellSelection": true,
+    "lengthChangeAndUndo": true,
+    "keyboardHeldDeleteAndUndo": true,
+    "insertSplitsPriorNote": true,
+    "laterOnsetClipsExtension": true,
+    "barEndClipsToThree": true,
+    "perTrackNewLengths": true,
+    "barCopyPreservesDurations": true,
+    "saveReload": true,
+    "sharedVersion": 7,
+    "sharedBassLengths": [
+      8,
+      8
+    ],
+    "mp3DownloadLink": true,
+    "wavDownloadLink": true,
+    "mobileEditAndUndo": true
+  },
+  "largeBackupImport": {
+    "bytes": 20751,
+    "bars": 16,
+    "bassLength": 8
+  },
+  "mobile": {
+    "viewport": [
+      390,
+      844
+    ],
+    "clientWidth": 375,
+    "scrollWidth": 375,
+    "physicalDevice": false
+  },
+  "consoleErrors": []
+}
