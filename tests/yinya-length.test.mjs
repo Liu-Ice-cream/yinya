@@ -9,7 +9,7 @@ test('legacy v1 JSON and links migrate without changing the original four-bar mu
   const original = structuredClone(legacy);
   const link = '#yinya=' + Buffer.from(JSON.stringify(legacy)).toString('base64url');
   const migrated = validate(legacy);
-  assert.equal(migrated.version, 7); assert.equal(migrated.barCount, 4);
+  assert.equal(migrated.version, 8); assert.equal(migrated.barCount, 4);
   assert.deepEqual(migrated.tracks, legacy.tracks);
   assert.deepEqual(decode(link), migrated);
   assert.deepEqual(legacy, original);
@@ -35,7 +35,7 @@ test('all supported lengths preserve full data through JSON and links, and rejec
     const invalid = structuredClone(state); invalid.tracks[3].bars.pop();
     assert.throws(() => validate(invalid));
   }
-  for (const count of [0, 1, 5, 12, 32, '8', NaN]) {
+  for (const count of [0, 1, 5, 10, 36, '8', NaN]) {
     assert.throws(() => blank('无效长度', count));
     assert.throws(() => validate({ ...preset('sprout'), barCount: count }));
   }
@@ -93,5 +93,5 @@ test('long playback follows across groups and loop seams, and clamps navigation 
     assert.equal(follower.selectedBar, 3); assert.throws(() => follower.select(4));
     follower.setBarCount(count); follower.start(); assert.equal(follower.update(4.5, true).selectedBar, 4);
   }
-  assert.throws(() => playbackPosition(0, 32));
+  assert.throws(() => playbackPosition(0, 36));
 });

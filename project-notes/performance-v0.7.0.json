@@ -1,0 +1,35 @@
+{
+  "version": "0.7.0",
+  "date": "2026-10-18",
+  "environment": {
+    "runtime": "v24.15.0",
+    "platform": "win32",
+    "architecture": "x64"
+  },
+  "scenario": {
+    "bars": 32,
+    "tempo": 60,
+    "allSectionsAndLayersEnabled": true,
+    "melody": "piano-v1",
+    "chords": "chord-acoustic-guitar-v1",
+    "performance": "arpeggio-v1",
+    "bass": "8-step notes",
+    "sampleRate": 44100
+  },
+  "output": {
+    "seconds": 128,
+    "wavBytes": 22579244,
+    "mp3Bytes": 3072626
+  },
+  "timingMilliseconds": {
+    "render": 2058,
+    "wav": 265,
+    "mp3": 14430
+  },
+  "sampledProcessPeakBytes": {
+    "rss": 377192448,
+    "heapUsed": 81492216,
+    "arrayBuffers": 142739331
+  },
+  "limitations": "Node process samples at render/encode progress callbacks, not browser or physical-phone memory; GC and machine load affect results."
+}

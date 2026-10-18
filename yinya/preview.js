@@ -1,6 +1,6 @@
 import { Song, Synth } from '../synth/synth.ts';
 import { Config } from '../synth/SynthConfig.ts';
-import { TRACKS, PITCHES, CHORDS, songJSON, validate, pitchedNoteAt, LONG_NOTE_TRACKS, chordNotes } from './model.js';
+import { TRACKS, PITCHES, CHORDS, GROUP_SIZE, songJSON, validate, pitchedNoteAt, LONG_NOTE_TRACKS, chordNotes, trackAudibleAt, hasAudibleNotes } from './model.js';
 import { releaseSeconds, voiceInfo, chordReleaseSeconds, chordVoiceInfo } from './voices.js';
 import { AudioRenderer, phraseState, fadeEnd } from './render.js';
 
@@ -19,10 +19,13 @@ export function previewPitches(trackIndex, row) {
 // A separate synth keeps the main loop, playhead and export data untouched.
 export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePosition = null) {
   const pitches = previewPitches(trackIndex, row), state = validate(value), layer = state.tracks[trackIndex];
-  if (!layer.enabled || layer.volume === 0) return null;
+  const bar = notePosition?.bar ?? 0;
+  if (!Number.isInteger(bar) || bar < 0 || bar >= state.barCount) throw new Error('试听小节位置无效');
+  if (!trackAudibleAt(state, trackIndex, bar)) return null;
   const json = songJSON(state); json.channels = [json.channels[trackIndex]];
   let seconds = PREVIEW_SECONDS;
-  const sequencePreview = notePosition !== null || (trackIndex === 1 && state.chordStyle !== 'block');
+  const positioned = notePosition?.step !== undefined;
+  const sequencePreview = positioned || (trackIndex === 1 && state.chordStyle !== 'block');
   if (sequencePreview) {
     if (![0, 1, 2].includes(trackIndex)) throw new Error('按实际时长试听仅支持旋律、和弦与贝斯');
     let start, duration, release, notes;
@@ -30,7 +33,7 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
       const note = pitchedNoteAt(state, trackIndex, notePosition.bar, notePosition.step);
       if (!note || note.pitch !== 7 - row) throw new Error('试听音符不存在');
       ({ start, duration } = note); release = trackIndex === 0 ? releaseSeconds(state.voice, state.tempo) : .07;
-    } else if (notePosition === null) {
+    } else if (!positioned) {
       start = 0; duration = 4; release = chordReleaseSeconds(state.chordVoice, state.tempo);
       notes = chordNotes(row, 0, state.chordVoice, state.chordStyle);
     } else {
@@ -75,7 +78,9 @@ export class PreviewPlayer {
     this.stop(); const generation = this.generation, state = validate(value);
     const position = notePosition === null ? null : { ...notePosition };
     previewPitches(trackIndex, row);
-    if (!state.tracks[trackIndex].enabled || state.tracks[trackIndex].volume === 0) return false;
+    const bar = position?.bar ?? 0;
+    if (!Number.isInteger(bar) || bar < 0 || bar >= state.barCount) throw new Error('试听小节位置无效');
+    if (!trackAudibleAt(state, trackIndex, bar)) return false;
     try {
       const context = this.context || (this.context = this.createContext());
       await context.resume();
@@ -103,7 +108,7 @@ export class PreviewPlayer {
   }
   async playPhrase(value, start, changed = () => {}, mode = 'melody') {
     this.stop(); const generation = this.generation, state = phraseState(value, start, mode);
-    if (!state.tracks.slice(0, 2).some(track => track.enabled && track.volume > 0 && track.bars.some(bar => bar.some(n => n >= 0)))) return false;
+    if (!hasAudibleNotes(state, 0, GROUP_SIZE, [0, 1])) return false;
     this.phraseChanged = changed; changed(true);
     try {
       const context = this.context || (this.context = this.createContext());

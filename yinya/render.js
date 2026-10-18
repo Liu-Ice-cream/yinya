@@ -1,12 +1,13 @@
 import { Song, Synth } from '../synth/synth.ts';
 import { SongRenderer } from '../editor/SongRenderer.ts';
-import { validate, songJSON, GROUP_SIZE } from './model.js';
+import { validate, songJSON, GROUP_SIZE, trackAudibleAt } from './model.js';
 import { voiceInfo, releaseSeconds, chordVoiceInfo, chordReleaseSeconds } from './voices.js';
 
 export function phraseState(value, start, mode = 'melody') {
   if (!['melody', 'duet'].includes(mode)) throw new Error('段落试听模式无效');
   const state = validate(value);
   if (!Number.isInteger(start) || start < 0 || start % GROUP_SIZE || start + GROUP_SIZE > state.barCount) throw new Error('试听段落无效');
+  state.sections = state.sections.slice(start / GROUP_SIZE, start / GROUP_SIZE + 1);
   state.barCount = GROUP_SIZE;
   state.tracks.forEach((track, index) => {
     track.enabled = (index === 0 || (mode === 'duet' && index === 1)) && track.enabled;
@@ -34,7 +35,7 @@ export class AudioRenderer {
       if (voice.legacy || !track.enabled || track.volume === 0) continue;
       let lastEnd = 0;
       track.bars.forEach((bar, barIndex) => bar.forEach((pitch, step) => {
-        if (pitch >= 0) lastEnd = Math.max(lastEnd, barIndex * 16 + (index === 0 ? step + track.durations[barIndex][step] : step * 4 + 4));
+        if (pitch >= 0 && trackAudibleAt(state, index, barIndex)) lastEnd = Math.max(lastEnd, barIndex * 16 + (index === 0 ? step + track.durations[barIndex][step] : step * 4 + 4));
       }));
       if (!lastEnd) continue;
       hasNewVoice = true;
