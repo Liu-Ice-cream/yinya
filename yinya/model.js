@@ -1,15 +1,21 @@
 // Original 音芽 interface and patterns. BeepBox audio code retains its MIT notice.
-import { voiceInfo, melodyInstrument, chordVoiceInfo, chordInstrument } from './voices.js';
-export const VERSION = 8;
+import { voiceInfo, melodyInstrument, chordVoiceInfo, chordInstrument, bassVoiceInfo, bassInstrument } from './voices.js';
+import { drumPattern } from './grooves.js';
+export const VERSION = 9;
+export const VELOCITIES = Object.freeze([{id:0,name:'轻'},{id:1,name:'标准'},{id:2,name:'重'}].map(Object.freeze));
 export const CHORD_STYLES = Object.freeze([
   Object.freeze({ id: 'block', name: '齐奏', hint: '每拍三个音同时响。' }),
   Object.freeze({ id: 'arpeggio-v1', name: '分解', hint: '每拍按低 → 中 → 高 → 中，依次弹出四个短音。' }),
+  Object.freeze({ id: 'strum-v1', name: '轻扫弦', hint: '每拍从低到高错开起音，保留和声余韵。' }),
+  Object.freeze({ id: 'staccato-v1', name: '跳跃短奏', hint: '每拍两次短奏，中间留出空隙。' }),
+  Object.freeze({ id: 'arpeggio-rise-v1', name: '舒展分解', hint: '每拍先弹较长低音，再依次弹出中音和高音。' }),
 ]);
 export function chordStyleInfo(id) {
   const style = CHORD_STYLES.find(item => item.id === id);
   if (!style) throw new Error('无法识别这款和弦演奏方式，请使用支持该方式的音芽版本');
   return style;
 }
+export function sectionChordStyle(state, bar) { return state.sections[Math.floor(bar / GROUP_SIZE)].chordStyle === 'inherit' ? state.chordStyle : state.sections[Math.floor(bar / GROUP_SIZE)].chordStyle; }
 export const MAX_BACKUP_BYTES = 64 * 1024;
 export const LONG_NOTE_TRACKS = Object.freeze([0, 2]);
 export const NOTE_LENGTHS = [1, 2, 4, 8];
@@ -23,19 +29,23 @@ export const TRACKS = [
   { id: 'bass', name: '贝斯', hint: '用低音托住节奏。少放几个音，也会很好听。', rows: ['高音 mi', '高音 re', '高音 do', 'la', 'sol', 'mi', 're', 'do'], wave: 'square' },
   { id: 'drums', name: '鼓点', hint: '低鼓定节拍，小鼓加重音，沙帽填空隙。三行可以同时点亮。', rows: ['沙帽', '小鼓', '低鼓'] },
 ];
-function section(id, name = '新段落') { return { id, name, enabled: [true, true, true, true] }; }
+function section(id, name = '新段落') { return { id, name, enabled: [true, true, true, true], chordStyle: 'inherit' }; }
 function emptyBar(id) { return Array(id === 'chords' ? 4 : 16).fill(id === 'drums' ? 0 : -1); }
 export function blank(title = '我的第一段旋律', barCount = 4) {
   if (!BAR_COUNTS.includes(barCount)) throw new Error('请选择 4–32 小节，以四小节为一段');
-  return { version: VERSION, barCount, title, tempo: 108, chordVoice: 'rounded', chordStyle: 'block', sections: Array.from({ length: barCount / GROUP_SIZE }, (_, i) => section(`s${i + 1}`, `第 ${i + 1} 段`)), tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)), ...(['melody', 'bass'].includes(t.id) ? { durations: Array.from({ length: barCount }, () => Array(16).fill(1)) } : {}) })) };
+  return { version: VERSION, barCount, title, tempo: 108, bassVoice: 'square', chordVoice: 'rounded', chordStyle: 'block', sections: Array.from({ length: barCount / GROUP_SIZE }, (_, i) => section(`s${i + 1}`, `第 ${i + 1} 段`)), tracks: TRACKS.map(t => ({ id: t.id, enabled: true, volume: t.id === 'melody' ? 80 : 60, bars: Array.from({ length: barCount }, () => emptyBar(t.id)), ...(['melody', 'bass'].includes(t.id) ? { durations: Array.from({ length: barCount }, () => Array(16).fill(1)), velocities: Array.from({ length: barCount }, () => Array(16).fill(1)) } : {}) })) };
 }
 export const PRESETS = [
+  { id:'groove-pop', name:'晴窗律动', detail:'流行 · 16 小节' },
+  { id:'groove-night', name:'夜航微光', detail:'舒缓 · 16 小节' },
+  { id:'groove-pixel', name:'像素漫游', detail:'电子 · 16 小节' },
   { id: 'journey', name: '林间来信', detail: '完整小曲 · 16 小节', arranged: true },
   { id: 'sprout', name: '晴日发芽', detail: '轻快 · 108 BPM', tempo: 108, melody: [0, -1, 2, -1, 3, -1, 4, -1, 5, -1, 4, -1, 3, -1, 2, -1], chords: [0, 0, 1, 2], wave: 'triangle' },
   { id: 'moon', name: '月下散步', detail: '舒缓 · 80 BPM', tempo: 80, melody: [5, -1, -1, -1, 4, -1, 3, -1, 2, -1, -1, -1, 0, -1, -1, -1], chords: [1, 3, 0, 2], wave: 'rounded' },
   { id: 'pixel', name: '像素出发', detail: '跳跃 · 132 BPM', tempo: 132, melody: [0, 2, -1, 3, 5, -1, 3, -1, 4, 5, -1, 7, 5, -1, 3, -1], chords: [0, 2, 1, 0], wave: 'square' },
 ];
 export function preset(id) {
+  if (['groove-pop','groove-night','groove-pixel'].includes(id)) return performancePreset(id);
   if (id === 'journey') return arrangementPreset();
   const p = PRESETS.find(p => p.id === id) || PRESETS.find(p => p.id === 'sprout');
   const s = blank(p.name); s.tempo = p.tempo; s.voice = p.wave;
@@ -50,7 +60,7 @@ export function preset(id) {
   return s;
 }
 export function validate(value) {
-  if (!value || ![1, 2, 3, 4, 5, 6, 7, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
+  if (!value || ![1, 2, 3, 4, 5, 6, 7, 8, VERSION].includes(value.version) || typeof value.title !== 'string' || value.title.length > 60 || !Number.isInteger(value.tempo) || value.tempo < 60 || value.tempo > 180 || !Array.isArray(value.tracks) || value.tracks.length !== 4) throw new Error('不是有效的音芽作品');
   // v1 always had four bars. Reading old data migrates a copy, never the original.
   const barCount = value.version === 1 ? 4 : value.barCount;
   if (value.version < 8 && ![4, 8, 16].includes(barCount)) throw new Error('旧版作品的小节长度无效');
@@ -60,10 +70,13 @@ export function validate(value) {
     if (!Array.isArray(value.sections) || value.sections.length !== barCount / GROUP_SIZE) throw new Error('段落数据不完整');
     result.sections = value.sections.map(part => {
       if (!part || typeof part.id !== 'string' || !/^s[1-9][0-9]{0,5}$/.test(part.id) || ids.has(part.id) || typeof part.name !== 'string' || !part.name.trim() || part.name.length > 24 || !Array.isArray(part.enabled) || part.enabled.length !== 4 || part.enabled.some(n => typeof n !== 'boolean')) throw new Error('段落名称、标识或声部安排无效');
-      ids.add(part.id); return { id: part.id, name: part.name, enabled: [...part.enabled] };
+      const style = value.version < 9 ? 'inherit' : part.chordStyle;
+      if (style !== 'inherit') chordStyleInfo(style);
+      ids.add(part.id); return { id: part.id, name: part.name, enabled: [...part.enabled], chordStyle: style };
     });
   }
   result.tempo = value.tempo;
+  result.bassVoice = value.version < 9 ? 'square' : (value.bassVoice ?? 'square'); bassVoiceInfo(result.bassVoice);
   result.voice = value.version < 4 ? (['triangle', 'rounded', 'square'].includes(value.voice) ? value.voice : 'triangle') : (value.voice ?? 'triangle');
   voiceInfo(result.voice);
   result.chordVoice = value.version < 5 ? 'rounded' : (value.chordVoice ?? 'rounded');
@@ -99,7 +112,18 @@ export function validate(value) {
         });
       }
     }
-    return { id: t.id, enabled: t.enabled, volume: t.volume, bars, ...(durations ? { durations } : {}) };
+    let velocities;
+    if (durations) {
+      if (value.version < 9) velocities = bars.map(() => Array(16).fill(1));
+      else {
+        if (!Array.isArray(t.velocities) || t.velocities.length !== barCount) throw new Error('音符力度数据不完整');
+        velocities = t.velocities.map((levels, bar) => {
+          if (!Array.isArray(levels) || levels.length !== 16 || levels.some((n, step) => ![0,1,2].includes(n) || (bars[bar][step] < 0 && n !== 1))) throw new Error('音符力度无效');
+          return [...levels];
+        });
+      }
+    }
+    return { id: t.id, enabled: t.enabled, volume: t.volume, bars, ...(durations ? { durations, velocities } : {}) };
   });
   return result;
 }
@@ -109,6 +133,7 @@ export function resize(value, barCount, fill = 'empty') {
   for (const track of result.tracks) {
     const previous = track.bars;
     track.bars = Array.from({ length: barCount }, (_, i) => i < previousCount || fill === 'repeat' ? [...previous[i % previousCount]] : emptyBar(track.id));
+    if (track.velocities) { const levels = track.velocities; track.velocities = Array.from({ length: barCount }, (_, i) => i < previousCount || fill === 'repeat' ? [...levels[i % previousCount]] : Array(16).fill(1)); }
     if (track.durations) {
       const lengths = track.durations;
       track.durations = Array.from({ length: barCount }, (_, i) => i < previousCount || fill === 'repeat' ? [...lengths[i % previousCount]] : Array(16).fill(1));
@@ -118,7 +143,7 @@ export function resize(value, barCount, fill = 'empty') {
   result.sections = previous.slice(0, barCount / GROUP_SIZE);
   while (result.sections.length < barCount / GROUP_SIZE) {
     const i = result.sections.length, part = section(`s${nextSectionNumber(result.sections)}`, `第 ${i + 1} 段`);
-    if (fill === 'repeat') part.enabled = [...previous[i % previous.length].enabled];
+    if (fill === 'repeat') { part.enabled = [...previous[i % previous.length].enabled]; part.chordStyle = previous[i % previous.length].chordStyle; }
     result.sections.push(part);
   }
   result.barCount = barCount;
@@ -136,9 +161,11 @@ export function copyGroup(value, source, destination) {
   for (const track of state.tracks) {
     const bars = track.bars.slice(source, source + GROUP_SIZE).map(bar => [...bar]);
     track.bars.splice(destination, GROUP_SIZE, ...bars);
+    if (track.velocities) track.velocities.splice(destination, GROUP_SIZE, ...track.velocities.slice(source, source + GROUP_SIZE).map(bar => [...bar]));
     if (track.durations) track.durations.splice(destination, GROUP_SIZE, ...track.durations.slice(source, source + GROUP_SIZE).map(bar => [...bar]));
   }
   state.sections[destination / GROUP_SIZE].enabled = [...state.sections[source / GROUP_SIZE].enabled];
+  state.sections[destination / GROUP_SIZE].chordStyle = state.sections[source / GROUP_SIZE].chordStyle;
   return state;
 }
 // The grid contains note starts; held cells resolve to their owning note.
@@ -150,19 +177,21 @@ export function pitchedNoteAt(value, trackIndex, barIndex, step) {
   for (let start = step; start >= 0; start--) if (bar[start] >= 0) return start + lengths[start] > step ? { start, pitch: bar[start], duration: lengths[start] } : null;
   return null;
 }
-export function setPitchedNote(value, trackIndex, barIndex, step, pitch, duration) {
+export function setPitchedNote(value, trackIndex, barIndex, step, pitch, duration, velocity = null) {
   if (!Number.isInteger(pitch) || pitch < 0 || pitch > 7 || !NOTE_LENGTHS.includes(duration)) throw new Error('音高或时长无效');
   const state = validate(value), previous = pitchedNoteAt(state, trackIndex, barIndex, step);
   const track = state.tracks[trackIndex], bar = track.bars[barIndex], lengths = track.durations[barIndex];
   if (previous && previous.start < step) lengths[previous.start] = step - previous.start;
   const next = bar.findIndex((n, i) => i > step && n >= 0);
+  if (velocity !== null && ![0,1,2].includes(velocity)) throw new Error('音符力度无效');
+  track.velocities[barIndex][step] = velocity ?? (bar[step] >= 0 ? track.velocities[barIndex][step] : 1);
   const actual = Math.min(duration, (next < 0 ? 16 : next) - step);
   bar[step] = pitch; lengths[step] = actual;
   return { state, start: step, duration: actual, limited: actual !== duration };
 }
 export function removePitchedNote(value, trackIndex, barIndex, step) {
   const state = validate(value), note = pitchedNoteAt(state, trackIndex, barIndex, step);
-  if (note) { state.tracks[trackIndex].bars[barIndex][note.start] = -1; state.tracks[trackIndex].durations[barIndex][note.start] = 1; }
+  if (note) { state.tracks[trackIndex].bars[barIndex][note.start] = -1; state.tracks[trackIndex].durations[barIndex][note.start] = 1; state.tracks[trackIndex].velocities[barIndex][note.start] = 1; }
   return state;
 }
 // Keep the melody API for callers that only edit the lead voice.
@@ -173,6 +202,7 @@ export function copyBar(value, trackIndex, source, destination) {
   const state = validate(value);
   if (!Number.isInteger(trackIndex) || trackIndex < 0 || trackIndex > 3 || ![source, destination].every(i => Number.isInteger(i) && i >= 0 && i < state.barCount)) throw new Error('复制小节位置无效');
   const track = state.tracks[trackIndex]; track.bars[destination] = [...track.bars[source]];
+  if (track.velocities) track.velocities[destination] = [...track.velocities[source]];
   if (track.durations) track.durations[destination] = [...track.durations[source]];
   return state;
 }
@@ -198,6 +228,9 @@ export function chordNotes(row, beat, voiceId, styleId = 'block') {
   chordStyleInfo(styleId);
   const voice = chordVoiceInfo(voiceId), pitches = CHORDS[row], start = beat * 4;
   const notes = styleId === 'block' ? [note(pitches, start, start + 4, 65)] :
+    styleId === 'strum-v1' ? [0,1,2].map(i => note(pitches.slice(0,i+1), start + i * .5, start + (i === 2 ? 4 : (i+1)*.5), 65)) :
+    styleId === 'staccato-v1' ? [0,2].map(offset => note(pitches, start + offset, start + offset + 1, 65)) :
+    styleId === 'arpeggio-rise-v1' ? [0,1,2].map((p, i) => note([pitches[p]], start + [0,2,3][i], start + [2,3,4][i], 65)) :
     [0, 1, 2, 1].map((index, step) => note([pitches[index]], start + step, start + step + 1, 65));
   if (!voice.legacy) notes.forEach(n => n.points.forEach(point => { point.volume = voice.noteVolume; }));
   return notes;
@@ -206,14 +239,17 @@ export function songJSON(value) {
   const s = validate(value);
   return { format: 'BeepBox', version: 9, scale: 'easy :)', key: 'C', introBars: 0, loopBars: s.barCount, beatsPerBar: 4, ticksPerBeat: 4, beatsPerMinute: s.tempo, channels: s.tracks.map((t, index) => ({
     type: t.id === 'drums' ? 'drum' : 'pitch',
-    instruments: [index === 0 ? melodyInstrument(s.voice, t.volume) : index === 1 ? chordInstrument(s.chordVoice, t.volume) : { type: t.id === 'drums' ? 'drumset' : 'chip', wave: TRACKS[index].wave, volume: t.volume, effects: ['transition type', 'chord type'], transition: 'normal', chord: 'simultaneous', fadeInSeconds: 0, fadeOutTicks: -1,
+    instruments: [index === 0 ? melodyInstrument(s.voice, t.volume) : index === 1 ? chordInstrument(s.chordVoice, t.volume) : index === 2 ? bassInstrument(s.bassVoice, t.volume) : { type: t.id === 'drums' ? 'drumset' : 'chip', wave: TRACKS[index].wave, volume: t.volume, effects: ['transition type', 'chord type'], transition: 'normal', chord: 'simultaneous', fadeInSeconds: 0, fadeOutTicks: -1,
       ...(t.id === 'drums' ? { drums: Array.from({ length: 12 }, (_, drum) => ({ filterEnvelope: drum >= 8 ? 'twang 1' : 'twang 2', spectrum: Array.from({ length: 30 }, (_, band) => drum === 0 ? Math.max(0, 100 - band * 17) : drum === 4 ? (band > 3 && band < 17 ? 75 : 15) : drum === 8 ? (band > 17 ? 80 : 0) : 0) })) } : {}) }],
     patterns: t.bars.map((bar, barIndex) => ({ notes: bar.flatMap((n, step) => {
       if (!s.sections[Math.floor(barIndex / GROUP_SIZE)].enabled[index] || n < 0 || (t.id === 'drums' && n === 0)) return [];
       if (t.id === 'drums') return [note([0, 4, 8].filter((_, bit) => n & (1 << bit)), step, step + 1, 70)];
-      if (t.id === 'chords') return chordNotes(n, step, s.chordVoice, s.chordStyle);
+      if (t.id === 'chords') return chordNotes(n, step, s.chordVoice, sectionChordStyle(s, barIndex));
       const result = note([PITCHES[n] + (t.id === 'bass' ? 24 : 48)], step, step + t.durations[barIndex][step]);
       if (t.id === 'melody' && !voiceInfo(s.voice).legacy) result.points.forEach(point => { point.volume = voiceInfo(s.voice).noteVolume ?? 90; });
+      const level = t.velocities[barIndex][step], bassGain = index === 2 ? bassVoiceInfo(s.bassVoice).noteVolume / 90 : 1;
+      if (bassGain !== 1) result.points.forEach(point => { point.volume = bassVoiceInfo(s.bassVoice).noteVolume; });
+      if (level !== 1) result.yinyaGain = [.55,1,1.35][level];
       return [result];
     }) })),
     sequence: Array.from({ length: s.barCount }, (_, i) => i + 1),
@@ -246,10 +282,11 @@ export function insertSection(value, after, duplicate = false) {
   if (state.barCount === 32) throw new Error('最多支持 32 小节');
   const at = (after + 1) * GROUP_SIZE;
   const source = state.sections[after], part = section(`s${nextSectionNumber(state.sections)}`);
-  if (duplicate) { part.name = `${source.name.slice(0, 20)} 副本`; part.enabled = [...source.enabled]; }
+  if (duplicate) { part.name = `${source.name.slice(0, 20)} 副本`; part.enabled = [...source.enabled]; part.chordStyle = source.chordStyle; }
   state.sections.splice(after + 1, 0, part);
   state.tracks.forEach(track => {
     const bars = duplicate ? track.bars.slice(after * GROUP_SIZE, at).map(bar => [...bar]) : Array.from({ length: GROUP_SIZE }, () => emptyBar(track.id));
+    if (track.velocities) track.velocities.splice(at, 0, ...(duplicate ? track.velocities.slice(after * GROUP_SIZE, at).map(bar => [...bar]) : Array.from({ length: GROUP_SIZE }, () => Array(16).fill(1))));
     if (track.durations) track.durations.splice(at, 0, ...(duplicate ? track.durations.slice(after * GROUP_SIZE, at).map(bar => [...bar]) : Array.from({ length: GROUP_SIZE }, () => Array(16).fill(1))));
     track.bars.splice(at, 0, ...bars);
   });
@@ -259,12 +296,12 @@ export function moveSection(value, index, destination) {
   const state = validate(value); checkSection(state, index); checkSection(state, destination);
   const move = (array, start, length, target) => { const moved = array.splice(start, length); array.splice(target, 0, ...moved); };
   move(state.sections, index, 1, destination);
-  state.tracks.forEach(track => { move(track.bars, index * GROUP_SIZE, GROUP_SIZE, destination * GROUP_SIZE); if (track.durations) move(track.durations, index * GROUP_SIZE, GROUP_SIZE, destination * GROUP_SIZE); });
+  state.tracks.forEach(track => { move(track.bars, index * GROUP_SIZE, GROUP_SIZE, destination * GROUP_SIZE); if (track.velocities) move(track.velocities, index * GROUP_SIZE, GROUP_SIZE, destination * GROUP_SIZE); if (track.durations) move(track.durations, index * GROUP_SIZE, GROUP_SIZE, destination * GROUP_SIZE); });
   return state;
 }
 export function deleteSection(value, index) {
   const state = validate(value); checkSection(state, index); if (state.sections.length === 1) throw new Error('至少保留一个段落');
-  state.sections.splice(index, 1); state.tracks.forEach(track => { track.bars.splice(index * GROUP_SIZE, GROUP_SIZE); track.durations?.splice(index * GROUP_SIZE, GROUP_SIZE); });
+  state.sections.splice(index, 1); state.tracks.forEach(track => { track.bars.splice(index * GROUP_SIZE, GROUP_SIZE); track.velocities?.splice(index * GROUP_SIZE, GROUP_SIZE); track.durations?.splice(index * GROUP_SIZE, GROUP_SIZE); });
   state.barCount -= GROUP_SIZE; return state;
 }
 export function trackAudibleAt(state, track, bar) { return state.tracks[track].enabled && state.tracks[track].volume > 0 && state.sections[Math.floor(bar / GROUP_SIZE)].enabled[track]; }
@@ -284,5 +321,48 @@ export function arrangementPreset() {
     for (const step of [0, 8]) state = setPitchedNote(state, 2, bar, step, [0, 4, 3, 0][bar % 4], 8).state;
     state.tracks[3].bars[bar] = Array.from({ length: 16 }, (_, step) => (step % 8 === 0 ? 1 : 0) | (step % 8 === 4 ? 2 : 0) | (step % 2 === 0 ? 4 : 0));
   }
+  return state;
+}
+
+export function setNoteVelocity(value, track, bar, step, level) {
+  const state = validate(value), note = pitchedNoteAt(state, track, bar, step);
+  if (!note || ![0,1,2].includes(level)) throw new Error('请选择音符并设置有效力度');
+  state.tracks[track].velocities[bar][note.start] = level; return state;
+}
+export function setSectionChordStyle(value, index, style) {
+  const state = validate(value); checkSection(state,index); if (style !== 'inherit') chordStyleInfo(style);
+  state.sections[index].chordStyle = style; return state;
+}
+export function applyDrumPattern(value, start, count, id, fill = false) {
+  const state = validate(value);
+  if (!Number.isInteger(start) || ![1,4].includes(count) || typeof fill !== 'boolean' || start < 0 || start + count > state.barCount || (count === 4 && start % 4)) throw new Error('鼓点应用范围无效');
+  for (let i = 0; i < count; i++) state.tracks[3].bars[start+i] = drumPattern(id,i,fill && i === count-1);
+  return state;
+}
+
+export function performancePreset(id) {
+  const variants = {
+    'groove-pop': ['晴窗律动',112,'acoustic-guitar-v1','chord-acoustic-guitar-v1','bass-pluck-v1','pop-v1','strum-v1',0],
+    'groove-night': ['夜航微光',76,'electric-piano-v1','chord-electric-piano-v1','bass-soft-v1','gentle-v1','arpeggio-rise-v1',-1],
+    'groove-pixel': ['像素漫游',132,'square','rounded','square','pixel-v1','staccato-v1',1],
+  };
+  const config = variants[id]; if (!config) throw new Error('完整示例不存在');
+  const [title,tempo,voice,chordVoice,bassVoice,drums,style,shift] = config;
+  let state = arrangementPreset(); Object.assign(state,{title,tempo,voice,chordVoice,bassVoice});
+  state.sections.forEach((part,i) => { part.chordStyle = i === 0 ? 'arpeggio-rise-v1' : i === 3 ? 'block' : style; });
+  state.sections[0].enabled = [true,true,false,true];
+  for (let bar = 0; bar < 16; bar++) {
+    const melody = state.tracks[0];
+    if (bar < 12 && id !== 'groove-pop') {
+      melody.bars[bar].fill(-1); melody.durations[bar].fill(1);
+      const night = [[[0,5,8],[10,3,4]],[[0,4,4],[6,2,4],[12,0,4]],[[0,2,8],[10,4,4]],[[0,3,4],[8,0,8]]];
+      const pixel = [[0,0,2],[3,2,1],[4,4,2],[6,3,2],[8,5,2],[10,4,2],[12,2,2],[14,0,2]];
+      const phrase = id === 'groove-night' ? night[bar % 4] : pixel.map(([step,pitch,length]) => [step,Math.min(7,pitch+(bar % 4 === 2 ? 2 : 0)),length]);
+      for (const [step,pitch,length] of phrase) { melody.bars[bar][step]=pitch; melody.durations[bar][step]=length; }
+    }
+    melody.bars[bar] = melody.bars[bar].map(n => n < 0 ? n : Math.max(0,Math.min(7,n+shift)));
+    for (const track of [0,2]) state.tracks[track].velocities[bar] = state.tracks[track].bars[bar].map((n,step) => n < 0 ? 1 : step === 0 ? 2 : 0);
+  }
+  for (let start = 0; start < 16; start += 4) state = applyDrumPattern(state,start,4,drums,start === 8);
   return state;
 }

@@ -1,7 +1,8 @@
-import { Song, Synth } from '../synth/synth.ts';
+import { Synth } from '../synth/synth.ts';
 import { SongRenderer } from '../editor/SongRenderer.ts';
+import { audioSong } from './song.js';
 import { validate, songJSON, GROUP_SIZE, trackAudibleAt } from './model.js';
-import { voiceInfo, releaseSeconds, chordVoiceInfo, chordReleaseSeconds } from './voices.js';
+import { voiceInfo, releaseSeconds, chordVoiceInfo, chordReleaseSeconds, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
 
 export function phraseState(value, start, mode = 'melody') {
   if (!['melody', 'duet'].includes(mode)) throw new Error('段落试听模式无效');
@@ -13,6 +14,7 @@ export function phraseState(value, start, mode = 'melody') {
     track.enabled = (index === 0 || (mode === 'duet' && index === 1)) && track.enabled;
     track.bars = track.bars.slice(start, start + GROUP_SIZE);
     if (track.durations) track.durations = track.durations.slice(start, start + GROUP_SIZE);
+    if (track.velocities) track.velocities = track.velocities.slice(start, start + GROUP_SIZE);
   });
   return state;
 }
@@ -29,26 +31,27 @@ export class AudioRenderer {
     const state = validate(value);
     let hasNewVoice = false;
     this.tailSeconds = 0;
-    for (const index of [0, 1]) {
-      const track = state.tracks[index], id = index === 0 ? state.voice : state.chordVoice;
-      const voice = index === 0 ? voiceInfo(id) : chordVoiceInfo(id);
+    const json = songJSON(state);
+    for (const index of [0, 1, 2]) {
+      const track = state.tracks[index], id = index === 0 ? state.voice : index === 1 ? state.chordVoice : state.bassVoice;
+      const voice = index === 0 ? voiceInfo(id) : index === 1 ? chordVoiceInfo(id) : bassVoiceInfo(id);
       if (voice.legacy || !track.enabled || track.volume === 0) continue;
       let lastEnd = 0;
-      track.bars.forEach((bar, barIndex) => bar.forEach((pitch, step) => {
-        if (pitch >= 0 && trackAudibleAt(state, index, barIndex)) lastEnd = Math.max(lastEnd, barIndex * 16 + (index === 0 ? step + track.durations[barIndex][step] : step * 4 + 4));
-      }));
+      json.channels[index].patterns.forEach((pattern, bar) => {
+        if (!trackAudibleAt(state,index,bar)) return;
+        for (const note of pattern.notes) lastEnd = Math.max(lastEnd,bar * 16 + note.points.at(-1).tick);
+      });
       if (!lastEnd) continue;
       hasNewVoice = true;
       const silence = (state.barCount * 16 - lastEnd) * 60 / state.tempo / 4;
-      const release = index === 0 ? releaseSeconds(id, state.tempo) : chordReleaseSeconds(id, state.tempo);
+      const release = index === 0 ? releaseSeconds(id, state.tempo) : index === 1 ? chordReleaseSeconds(id, state.tempo) : bassReleaseSeconds(id,state.tempo);
       if (ending === 'natural') this.tailSeconds = Math.max(this.tailSeconds, release - silence);
     }
-    const json = songJSON(state);
     if (this.tailSeconds) {
       json.loopBars++;
       json.channels.forEach(channel => channel.sequence.push(0));
     }
-    const song = new Song(); song.fromJsonObject(json);
+    const song = audioSong(json);
     state.tracks.forEach((track, index) => { song.channels[index].muted = !track.enabled || track.volume === 0; });
     const synth = new Synth(song); synth.samplesPerSecond = sampleRate;
     const musicalSamples = Math.ceil(synth.getSamplesPerBar() * state.barCount);

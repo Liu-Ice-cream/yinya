@@ -17,7 +17,7 @@ async function render(state, ending = 'natural') { const r = new AudioRenderer()
 function arpeggio(voice = 'chord-acoustic-guitar-v1', count = 4) { const s = blank('分解和弦', count); s.chordVoice = voice; s.chordStyle = 'arpeggio-v1'; return s; }
 
 test('arpeggios expand each chosen beat into low-middle-high-middle sixteenths, preserving rests, grid data and other layers', () => {
-  assert.deepEqual(CHORD_STYLES.map(s => s.id), ['block', 'arpeggio-v1']); assert.throws(() => { CHORD_STYLES[1].id = 'other'; });
+  assert.deepEqual(CHORD_STYLES.slice(0,2).map(s => s.id), ['block', 'arpeggio-v1']); assert.throws(() => { CHORD_STYLES[1].id = 'other'; });
   for (const voice of CHORD_VOICES) for (let row = 0; row < 4; row++) for (let beat = 0; beat < 4; beat++) {
     const state = preset('moon'); state.chordVoice = voice.id; state.chordStyle = 'arpeggio-v1'; state.tracks[1].bars[0] = [-1, -1, -1, -1]; state.tracks[1].bars[0][beat] = row;
     const before = structuredClone(state), json = songJSON(state), notes = json.channels[1].patterns[0].notes;
@@ -37,7 +37,7 @@ test('v1 through v5 migrate to block performance, retaining v5 chord timbre, v4 
     state.voice = version >= 4 ? 'piano-v1' : 'rounded'; state.chordVoice = version >= 5 ? 'chord-electric-piano-v1' : 'rounded'; delete state.chordStyle;
     if (version < 3) delete state.tracks[0].durations; if (version === 1) delete state.barCount;
     const before = structuredClone(state), upgraded = validate(state);
-    assert.equal(upgraded.version, 8); assert.equal(upgraded.chordStyle, 'block'); assert.equal(upgraded.voice, state.voice); assert.equal(upgraded.chordVoice, state.chordVoice);
+    assert.equal(upgraded.version, 9); assert.equal(upgraded.chordStyle, 'block'); assert.equal(upgraded.voice, state.voice); assert.equal(upgraded.chordVoice, state.chordVoice);
     assert.equal(upgraded.tracks[0].durations[3][12], version < 3 ? 1 : 4); assert.deepEqual(state, before);
     const notes = songJSON(upgraded).channels[1].patterns[0].notes;
     assert.equal(notes.length, 2); assert.deepEqual(notes.map(n => n.points.map(p => p.tick)), [[0, 4], [8, 12]]);

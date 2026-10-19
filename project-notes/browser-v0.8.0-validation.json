@@ -1,0 +1,30 @@
+{
+  "version":"0.8.0",
+  "date":"2026-10-19",
+  "environment":"Desktop in-app browser; default viewport and 390x844 viewport override, not a physical phone",
+  "checks":{
+    "v8DraftAndTenExistingWorksMigrated":true,
+    "sixDrumTemplateOptions":true,
+    "sectionTemplateWithFillShowsOverwritePrompt":true,
+    "cancelKeepsGridUnchanged":true,
+    "confirmedFillAppearsInLastBar":true,
+    "undoRestoresOriginalDrums":true,
+    "sectionChordStyleDoesNotChangeAnotherSection":true,
+    "bassVoiceSelectorAndNoteVelocityWork":true,
+    "lightVelocityChangesAllHeldCellsAndUndoRestoresStrong":true,
+    "duplicateAndMoveRetainVelocityAndChordStyle":true,
+    "melodyVelocityEditing":true,
+    "newExamplesFullPlaybackAndSectionLoopStart":true,
+    "full32BarMp3AndWavLinksGenerated":true,
+    "exportCancelPreservesComposition":true,
+    "saveReloadRetainsBassVoiceSectionStyleAndVelocity":true,
+    "shareReopensSameBassVoiceSectionStyleAndVelocity":true,
+    "narrowViewportTemplatePromptAndBassSelector":true,
+    "narrowDocumentNoHorizontalOverflow":true,
+    "viewportResetAfterValidation":true,
+    "noCapturedConsoleErrors":true
+  },
+  "narrowLayout":{"requestedViewportWidth":390,"clientWidth":375,"scrollWidth":375,"noteGrid":"horizontally scrollable inside its own container"},
+  "screenshots":["yinya-v0.8.0-desktop.jpg","yinya-v0.8.0-drums.jpg","yinya-v0.8.0-mobile.jpg"],
+  "limitations":"Browser export checks generated links and success messages. WAV structure, actual PCM and independent MP3 decoding, backup limits and legacy conversion are verified by automated tests. No physical-phone verification."
+}

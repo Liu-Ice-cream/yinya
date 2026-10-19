@@ -1,0 +1,37 @@
+{
+  "version": "0.8.0",
+  "date": "2026-10-19",
+  "environment": {
+    "runtime": "v24.15.0",
+    "platform": "win32",
+    "architecture": "x64"
+  },
+  "scenario": {
+    "bars": 32,
+    "tempo": 60,
+    "allSectionsAndLayersEnabled": true,
+    "melody": "acoustic-guitar-v1",
+    "chords": "chord-acoustic-guitar-v1",
+    "bass": "bass-pluck-v1",
+    "chordStyle": "strum-v1",
+    "chordsEveryBeat": true,
+    "velocity": "mixed light and strong",
+    "sampleRate": 44100
+  },
+  "output": {
+    "seconds": 128.33,
+    "wavBytes": 22637456,
+    "mp3Bytes": 3080777
+  },
+  "timingMilliseconds": {
+    "render": 2469,
+    "wav": 292,
+    "mp3": 9374
+  },
+  "sampledProcessPeakBytes": {
+    "rss": 371261440,
+    "heapUsed": 68344504,
+    "arrayBuffers": 145826753
+  },
+  "limitations": "Representative desktop Node scenario. Progress-callback memory samples include runtime and retained intermediate buffers; not browser or physical-phone memory, and not a worst-case bound."
+}

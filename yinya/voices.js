@@ -38,7 +38,7 @@ export const CHORD_VOICES = freeze([
   { id: 'rounded', name: '圆润波形', hint: '原有的温暖和声', legacy: true },
   { id: 'chord-piano-v1', name: '钢琴', hint: '清晰柔和的钢琴和声 · 合成音色', melodyId: 'piano-v1', noteVolume: 67, volumeOffset: -20 },
   { id: 'chord-electric-piano-v1', name: '电钢琴', hint: '温暖、有颗粒感的和声 · 合成音色', melodyId: 'electric-piano-v1', noteVolume: 67, volumeOffset: 0 },
-  { id: 'chord-acoustic-guitar-v1', name: '木吉他', hint: '同时拨响三音的钢弦和声 · 合成音色', melodyId: 'acoustic-guitar-v1', noteVolume: 67, volumeOffset: 0 },
+  { id: 'chord-acoustic-guitar-v1', name: '木吉他', hint: '钢弦质感的和声 · 合成音色', melodyId: 'acoustic-guitar-v1', noteVolume: 67, volumeOffset: 0 },
 ]);
 export function chordVoiceInfo(id) {
   const voice = CHORD_VOICES.find(item => item.id === id);
@@ -53,3 +53,25 @@ export function chordReleaseSeconds(id, tempo) {
   const voice = chordVoiceInfo(id);
   return releaseSeconds(voice.legacy ? 'rounded' : voice.melodyId, tempo);
 }
+
+// Fixed bass revisions; the original square-wave definition stays unchanged.
+export const BASS_VOICES = freeze([
+  { id: 'square', name: '复古方波', hint: '原有的明亮低音', legacy: true, noteVolume: 90 },
+  { id: 'bass-soft-v1', name: '柔和合成贝斯', hint: '圆润、平稳的合成低音', noteVolume: 67, volumeOffset: 8, releaseBeats: .125,
+    settings: { type: 'FM', eqFilter: [], effects: ['transition type','chord type'], fadeInSeconds: 0, fadeOutTicks: 6, algorithm: '1←(2 3←4)', feedbackType: '1⟲', feedbackAmplitude: 0, operators: [{frequency:'1×',amplitude:12},{frequency:'1×',amplitude:3},{frequency:'2×',amplitude:3},{frequency:'1×',amplitude:0}], envelopes: [] } },
+  { id: 'bass-pluck-v1', name: '拨弦风格贝斯', hint: '起音清楚、逐渐衰减的合成低音', noteVolume: 67, volumeOffset: -35, releaseBeats: .25,
+    settings: { type: 'harmonics', eqFilter: [], effects: ['note filter','transition type','chord type'], noteFilter: [{type:'low-pass',cutoffHz:2828,linearGain:.7071}], fadeInSeconds: 0, fadeOutTicks: 12, harmonics: [100,86,71,57,71,43,57,29,29,29,29,29,29,14,14,14,14,14,14,14,14,14,14,14,14,14,14,0], unison:'none', envelopes:[{target:'noteFilterAllFreqs',envelope:'twang 1'}] } },
+]);
+export function bassVoiceInfo(id) {
+  const voice = BASS_VOICES.find(v => v.id === id);
+  if (!voice) throw new Error('无法识别这款贝斯音色，请使用支持该音色的音芽版本');
+  return voice;
+}
+export function bassInstrument(id, volume) {
+  const voice = bassVoiceInfo(id);
+  if (voice.legacy) return melodyInstrument('square', volume);
+  const settings = JSON.parse(JSON.stringify(voice.settings));
+  settings.envelopes.push({target:'noteVolume',envelope:'note size'});
+  return {...settings,volume:Math.max(0,Math.min(100,volume+voice.volumeOffset)),transition:'normal',chord:'simultaneous'};
+}
+export function bassReleaseSeconds(id, tempo) { const voice = bassVoiceInfo(id); return voice.legacy ? .07 : voice.releaseBeats * 60 / tempo + .08; }
