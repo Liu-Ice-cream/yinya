@@ -1,0 +1,48 @@
+{
+  "version": "0.9.0",
+  "date": "2026-10-20",
+  "environment": "Windows desktop, Chromium in-app browser; 390 × 844 CSS-pixel responsive emulation (not a physical phone)",
+  "automatedTests": {
+    "total": 115,
+    "passed": 115,
+    "newTheoryTests": 16,
+    "frozenCompatibility": [
+      "v0.7.0: schemas 1–8",
+      "v0.8.0: schema 9, three complete performance examples"
+    ],
+    "audio": "Actual BeepBox parser and PCM synthesis; transposed 32-bar WAV and independent MP3 decoding"
+  },
+  "browser": {
+    "legacyMigration": "Existing 11 works retained; old draft title and bass timbre retained, default pentatonic and zero transpose",
+    "scaleSwitch": "Major E4 retained and marked outside natural minor; undo restores major",
+    "pitchViews": "Low/high/all and solfege/notes; hidden existing note count displayed; D transposition updates actual labels",
+    "octave": "Bar up/down succeeds; section overflow reports rejection without changing notes",
+    "harmony": "All 19 rows accessible; names and templates transpose to D; overwrite cancel, confirm, undo and redo; section strum retained",
+    "newNote": "Added B-relative si at actual C♯5 after +2 semitones, selected and previewed; undo restored source",
+    "playback": "Section loop, change transpose and stop verified",
+    "persistence": "Saved one new work (library now 12), reload and own share snapshot preserve title, major, +2 semitones and section strum",
+    "exports": "Browser MP3 and WAV complete for full 16-bar shifted song with download filenames; 32-bar codec validation covered in automated tests",
+    "consoleErrors": []
+  },
+  "responsive": {
+    "viewportWidth": 390,
+    "viewportHeight": 844,
+    "documentClientWidth": 375,
+    "documentScrollWidth": 375,
+    "innerGridClientWidth": 327,
+    "innerGridScrollWidth": 553,
+    "all19ChordRows": true,
+    "majorMinorAndTransposeControls": true
+  },
+  "screenshots": [
+    "yinya-v0.9.0-desktop.jpg",
+    "yinya-v0.9.0-harmony.jpg",
+    "yinya-v0.9.0-tonality.jpg",
+    "yinya-v0.9.0-mobile.jpg"
+  ],
+  "limits": [
+    "Not a physical-phone or multi-browser performance certification",
+    "Notes remain within one bar; global timbre, tempo and tonality",
+    "Chord templates intentionally leave bass unchanged"
+  ]
+}

@@ -9,7 +9,9 @@ export function audioSong(json) {
     pattern.notes.forEach((note, n) => {
       const gain = json.channels[c].patterns[p].notes[n]?.yinyaGain ?? 1;
       if (![.55, 1, 1.35].includes(gain)) throw new Error('音符力度超出支持范围');
-      if (gain !== 1) for (const pin of note.pins) pin.size *= Math.pow(gain, 2 / 3);
+      const chordGain=json.channels[c].patterns[p].notes[n]?.yinyaChordGain ?? 1;
+      if (![1,Math.sqrt(3/4)].includes(chordGain)) throw new Error('和弦强度无效');
+      if (gain * chordGain !== 1) for (const pin of note.pins) pin.size *= Math.pow(gain * chordGain, 2 / 3);
     });
   }));
   return song;

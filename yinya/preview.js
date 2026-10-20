@@ -1,25 +1,28 @@
 import { Synth } from '../synth/synth.ts';
+import { PITCH_VALUES } from './theory.js';
 import { Config } from '../synth/SynthConfig.ts';
 import { audioSong } from './song.js';
-import { TRACKS, PITCHES, CHORDS, GROUP_SIZE, songJSON, validate, pitchedNoteAt, LONG_NOTE_TRACKS, chordNotes, sectionChordStyle, trackAudibleAt, hasAudibleNotes } from './model.js';
+import { TRACKS, CHORDS, GROUP_SIZE, songJSON, validate, pitchedNoteAt, LONG_NOTE_TRACKS, chordNotes, sectionChordStyle, trackAudibleAt, hasAudibleNotes } from './model.js';
 import { releaseSeconds, voiceInfo, chordReleaseSeconds, chordVoiceInfo, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
 import { AudioRenderer, phraseState, fadeEnd } from './render.js';
 
 export const PREVIEW_SECONDS = .32;
 const HOLD_SECONDS = .25;
 
-export function previewPitches(trackIndex, row) {
-  const track = TRACKS[trackIndex];
-  if (!track || !Number.isInteger(row) || row < 0 || row >= track.rows.length) throw new Error('试听音符超出范围');
-  if (track.id === 'chords') return [...CHORDS[row]];
-  if (track.id === 'drums') return [[8], [4], [0]][row];
-  return [PITCHES[7 - row] + (track.id === 'bass' ? 24 : 48)];
+export function previewPitches(trackIndex, row, state = null, position = null) {
+  const track = TRACKS[trackIndex], shift = state?.transpose ?? 0;
+  if (!track || !Number.isInteger(row) || row < 0) throw new Error('试听音符超出范围');
+  if (track.id === 'chords') { if(!CHORDS[row])throw new Error('试听和弦超出范围');return CHORDS[row].map(p=>p+shift); }
+  if (track.id === 'drums') { if(row>2)throw new Error('试听鼓点超出范围');return [[8],[4],[0]][row]; }
+  const pitch=position?.pitch ?? (row<8?7-row:-1);
+  if(!Number.isInteger(pitch)||PITCH_VALUES[pitch]===undefined)throw new Error('试听音高超出范围');
+  return [PITCH_VALUES[pitch]+(track.id==='bass'?24:48)+shift];
 }
 
 // Render only the clicked sound with the same BeepBox instrument as the song.
 // A separate synth keeps the main loop, playhead and export data untouched.
 export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePosition = null) {
-  const pitches = previewPitches(trackIndex, row), state = validate(value), layer = state.tracks[trackIndex];
+  const state = validate(value), pitches = previewPitches(trackIndex, row, state, notePosition), layer = state.tracks[trackIndex];
   const bar = notePosition?.bar ?? 0;
   if (!Number.isInteger(bar) || bar < 0 || bar >= state.barCount) throw new Error('试听小节位置无效');
   if (!trackAudibleAt(state, trackIndex, bar)) return null;
@@ -27,17 +30,17 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   let seconds = PREVIEW_SECONDS;
   const positioned = notePosition?.step !== undefined;
   const style = sectionChordStyle(state,bar);
-  const sequencePreview = positioned || (trackIndex === 1 && style !== 'block');
+  const sequencePreview = positioned || (trackIndex === 1 && (style !== 'block' || row >= 4));
   if (sequencePreview) {
     if (![0, 1, 2].includes(trackIndex)) throw new Error('按实际时长试听仅支持旋律、和弦与贝斯');
     let start, duration, release, notes;
     if (LONG_NOTE_TRACKS.includes(trackIndex)) {
       const note = pitchedNoteAt(state, trackIndex, notePosition.bar, notePosition.step);
-      if (!note || note.pitch !== 7 - row) throw new Error('试听音符不存在');
+      if (!note || PITCH_VALUES[note.pitch] + (trackIndex===0?48:24) + state.transpose !== pitches[0]) throw new Error('试听音符不存在');
       ({ start, duration } = note); release = trackIndex === 0 ? releaseSeconds(state.voice, state.tempo) : bassReleaseSeconds(state.bassVoice,state.tempo);
     } else if (!positioned) {
       start = 0; duration = 4; release = chordReleaseSeconds(state.chordVoice, state.tempo);
-      notes = chordNotes(row, 0, state.chordVoice, style);
+      notes = chordNotes(row, 0, state.chordVoice, style, state.transpose);
     } else {
       const { bar, step } = notePosition;
       if (!Number.isInteger(bar) || !Number.isInteger(step) || bar < 0 || bar >= state.barCount || step < 0 || step > 3 || layer.bars[bar][step] !== row) throw new Error('试听和弦不存在');
@@ -79,7 +82,7 @@ export class PreviewPlayer {
   async play(value, trackIndex, row, notePosition = null) {
     this.stop(); const generation = this.generation, state = validate(value);
     const position = notePosition === null ? null : { ...notePosition };
-    previewPitches(trackIndex, row);
+    previewPitches(trackIndex, row, state, position);
     const bar = position?.bar ?? 0;
     if (!Number.isInteger(bar) || bar < 0 || bar >= state.barCount) throw new Error('试听小节位置无效');
     if (!trackAudibleAt(state, trackIndex, bar)) return false;

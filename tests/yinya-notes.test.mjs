@@ -9,7 +9,7 @@ test('v1 and v2 migration keeps adjacent repeated notes separate with their exac
     delete old.tracks[0].durations;
     old.tracks[0].bars[0][0] = 3; old.tracks[0].bars[0][1] = 3;
     const before = structuredClone(old), migrated = validate(old);
-    assert.equal(migrated.version, 9);
+    assert.equal(migrated.version, 10);
     assert.deepEqual(migrated.tracks[0].durations[0], Array(16).fill(1));
     assert.deepEqual(migrated.tracks[0].bars, old.tracks[0].bars);
     const notes = songJSON(migrated).channels[0].patterns[0].notes;
@@ -42,7 +42,7 @@ test('lengths clip at bar ends and later onsets, while malformed or overlapping 
   for (const mutate of [s => delete s.tracks[0].durations, s => s.tracks[0].durations.pop(), s => s.tracks[0].durations[0].pop(), s => s.tracks[0].durations[0][0] = 9, s => s.tracks[0].durations[0][0] = 1.5, s => s.tracks[0].durations[0][3] = 2, s => s.tracks[0].bars[0][4] = 7]) {
     const invalid = structuredClone(note); mutate(invalid); assert.throws(() => validate(invalid));
   }
-  for (const args of [[-1, 0, 0, 1], [0, 16, 0, 1], [0, 0, 8, 1], [0, 0, 0, 3]]) assert.throws(() => setMelodyNote(blank(), ...args));
+  for (const args of [[-1, 0, 0, 1], [0, 16, 0, 1], [0, 0, 25, 1], [0, 0, 0, 3]]) assert.throws(() => setMelodyNote(blank(), ...args));
   assert.throws(() => validate({ ...end.state, tracks: end.state.tracks.map((t, i) => i ? t : { ...t, durations: t.durations.map(d => d.map((n, j) => j === 13 ? 8 : n)) }) }));
 });
 
