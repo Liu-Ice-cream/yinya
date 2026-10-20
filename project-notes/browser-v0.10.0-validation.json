@@ -7,7 +7,8 @@
     "passed": 136,
     "newAccompanimentTests": 21,
     "compatibility": "Frozen v0.7.0, v0.8.0, v0.9.0 canonical song conversions; schemas 1–10",
-    "scope": "19 chords × three bass patterns; all nonempty target combinations; scales and transpositions; rests, silence, async cancellation, 32-bar WAV and independent MP3 decoding"
+    "scope": "19 chords × three bass patterns; all nonempty target combinations; scales and transpositions; rests, silence, async cancellation, 32-bar WAV and independent MP3 decoding",
+    "fourTrackComparison": "Warm shared wave caches; seed random phases identically in isolated test process; compare preview and export stereo PCM at 44100 / 48000 Hz; restore Math.random in finally"
   },
   "browser": {
     "existingLibrary": "12 existing works retained; one newly saved accompaniment work, total 13",

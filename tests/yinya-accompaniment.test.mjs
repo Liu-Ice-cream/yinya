@@ -14,7 +14,6 @@ const {AudioRenderer,sectionState,phraseState,PreviewPlayer}=await import('../bu
 globalThis.requestAnimationFrame=callback=>setImmediate(callback);
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
 const audible=a=>a.some(n=>Math.abs(n)>.001);
-const rms=a=>Math.sqrt(a.reduce((sum,n)=>sum+n*n,0)/a.length);
 const difference=(a,b)=>{assert.equal(a.length,b.length);let sum=0;for(let i=0;i<a.length;i++)sum+=(a[i]-b[i])**2;return Math.sqrt(sum/a.length);};
 async function render(s,rate=44100,ending='natural'){const r=new AudioRenderer();for await(const _ of r.generate(s,rate,ending)){}return r;}
 const ensemble=(style='pop-v1',extra={})=>({mode:'ensemble',style,...extra});
@@ -99,9 +98,21 @@ test('full section snapshots retain all four timbres, local masks, tonality and 
   for(let i=0;i<4;i++){assert.equal(snap.tracks[i].enabled,s.tracks[i].enabled);assert.deepEqual(snap.tracks[i].bars,s.tracks[i].bars.slice(8,12));}
   snap.tracks[2].bars[0][0]=0;assert.deepEqual(s,before);assert.throws(()=>phraseState(s,0,'all'));assert.equal(phraseState(s,0,'duet').tracks[3].enabled,false);assert.throws(()=>sectionState(s,2));
 });
-test('candidate preview uses the same four-track section duration and audio levels as normal export at both device rates',async()=>{
-  for(const rate of [44100,48000]){const s=generateAccompaniment(setTranspose(preset('tone-day'),2),4,ensemble('electro-v1')),audio=context();audio.sampleRate=rate;const player=new PreviewPlayer(()=>audio);
-    assert.equal(await player.playSection(s,4),true);const expected=await render(sectionState(s,4),rate);assert.equal(audio.buffers[0].samples[0].length,expected.outputSamplesL.length);for(const [actual,reference] of [[audio.buffers[0].samples[0],expected.outputSamplesL],[audio.buffers[0].samples[1],expected.outputSamplesR]]){assert.ok(actual.every(Number.isFinite));assert.ok(audible(actual));assert.ok(Math.abs(rms(actual)/rms(reference)-1)<.12,'plucked-string and drum noise have random phases; compare aggregate level');}player.dispose();
+test('candidate preview matches full four-track export PCM with controlled random phases at both device rates',async()=>{
+  const seededRandom=()=>{let state=0x7919b27;return ()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};};
+  for(const rate of [44100,48000]){
+    const s=generateAccompaniment(setTranspose(preset('tone-day'),2),4,ensemble('electro-v1')),audio=context();audio.sampleRate=rate;
+    const player=new PreviewPlayer(()=>audio),random=Math.random;
+    // Warm shared wave caches before resetting the per-render random phases.
+    // This isolated test process restores Math.random even if an assertion fails.
+    await render(sectionState(s,4),rate);
+    try {
+      Math.random=seededRandom();assert.equal(await player.playSection(s,4),true);
+      Math.random=seededRandom();const expected=await render(sectionState(s,4),rate);
+      for(const [actual,reference] of [[audio.buffers[0].samples[0],expected.outputSamplesL],[audio.buffers[0].samples[1],expected.outputSamplesR]]){
+        assert.ok(actual.every(Number.isFinite));assert.ok(audible(actual));assert.ok(difference(actual,reference)<1e-6,'same seed, notes and settings must reproduce preview/export PCM');
+      }
+    } finally {Math.random=random;player.dispose();}
   }
 });
 test('rapid original-candidate switching and stop during permission waits only play the latest immutable snapshot',async()=>{
