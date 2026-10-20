@@ -3,8 +3,9 @@ import { AudioRenderer } from './render.js';
 import { audioSong } from './song.js';
 import { VOICES, voiceInfo, CHORD_VOICES, chordVoiceInfo, BASS_VOICES, bassVoiceInfo } from './voices.js';
 import { TRACKS, PRESETS, GROUP_SIZE, BAR_COUNTS, NOTE_LENGTHS, MAX_BACKUP_BYTES, parseBackup, LONG_NOTE_TRACKS, CHORD_STYLES, chordStyleInfo, VELOCITIES, sectionChordStyle, setSectionChordStyle, setNoteVelocity, applyDrumPattern, setScale, setTranspose, shiftOctave, applyProgression, renameSection, setSectionTrack, insertSection, moveSection, deleteSection, trackAudibleAt, hasAudibleNotes, blank, preset, validate, resize, rangeHasNotes, copyGroup, copyBar, pitchedNoteAt, setPitchedNote, removePitchedNote, encode, decode, songJSON, wavBuffer } from './model.js';
-import { SCALES, PROGRESSIONS, scaleInfo, inScale, keyName, pitchName, chordName, pitchRows, chordRows } from './theory.js';
+import { PITCH_VALUES, SCALES, PROGRESSIONS, scaleInfo, inScale, keyName, pitchName, chordName, pitchRows, chordRows } from './theory.js';
 import { BASS_PATTERNS, ACCOMPANIMENT_STYLES, bassPatternInfo, accompanimentStyleInfo, generateAccompaniment, harmonicRuns } from './accompaniment.js';
+import { MELODY_STYLES, MELODY_DENSITIES, melodyStyleInfo, melodyTarget, melodyHarmonyInfo, generateMelody } from './melody.js';
 import { DRUM_PATTERNS } from './grooves.js';
 import { PreviewPlayer } from './preview.js';
 import { PlaybackFollower, playbackPosition, playbackRange, configurePlayback } from './playback.js';
@@ -19,6 +20,7 @@ let synth = new Synth(), lastStep = -1, consumedShare = false;
 let exportJob = null;
 let pendingConfirmation = null;
 let workshopSession = null, workshopPreview = null;
+let melodySession = null, melodyPreview = null;
 let selectedNote = null;
 const newNoteLengths = { 0: 1, 2: 1 };
 const newNoteVelocities = { 0: 1, 2: 1 };
@@ -90,6 +92,7 @@ function snapshot() { return { state: clone(state), id: activeId, bar: follower.
 function commit(next, message, id = activeId) {
   const clean = validate(next);
   if (workshopSession) closeWorkshop();
+  if (melodySession) closeMelodyWorkshop();
   preview.stop();
   history.push(snapshot()); if (history.length > 100) history.shift(); future.length = 0;
   state = clean; activeId = id;
@@ -129,7 +132,7 @@ function renderTracks() {
 function renderControls() {
   const t = TRACKS[selectedTrack], layer = state.tracks[selectedTrack];
   renderTheoryControls();
-  $('open-workshop').disabled = exporting;
+  $('open-workshop').disabled = $('open-melody').disabled = exporting;
   $('title').value = state.title; $('tempo').value = state.tempo;
   $('bar-count').value = state.barCount;
   $('length-fill').disabled = state.barCount === 32;
@@ -501,13 +504,13 @@ $('cancel-export').addEventListener('click', () => {
   if (!exportJob) return;
   exportJob.canceled = true; exportJob.renderer.canceled = true; exportJob.worker?.terminate(); exportJob.reject?.(new DOMException('已取消', 'AbortError'));
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { preview.dispose(); if (workshopSession) workshopSession.request++; if (synth.playing) { stop(); status('切到后台后已暂停，回来按播放即可继续。'); } } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { preview.dispose(); if (workshopSession) workshopSession.request++; if (melodySession) melodySession.request++; if (synth.playing) { stop(); status('切到后台后已暂停，回来按播放即可继续。'); } } });
 window.addEventListener('pagehide', () => preview.dispose());
 document.addEventListener('keydown', e => {
   if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(document.activeElement?.tagName) || document.querySelector('dialog[open]')) return;
   if (e.code === 'Space') { e.preventDefault(); $('play').click(); }
 });
-for (const [id, choices] of [['workshop-bass', BASS_PATTERNS], ['workshop-style', ACCOMPANIMENT_STYLES]]) $(id).replaceChildren(...choices.map(choice => { const option = document.createElement('option'); option.value = choice.id; option.textContent = choice.name; return option; }));
+for (const [id, choices] of [['workshop-bass', BASS_PATTERNS], ['workshop-style', ACCOMPANIMENT_STYLES], ['melody-style', MELODY_STYLES], ['melody-density', MELODY_DENSITIES]]) $(id).replaceChildren(...choices.map(choice => { const option = document.createElement('option'); option.value = choice.id; option.textContent = choice.name; return option; }));
 $('scale').replaceChildren(...SCALES.map(scale=>{const o=document.createElement('option');o.value=scale.id;o.textContent=scale.name;return o;}));
 $('transpose').replaceChildren(...Array.from({length:25},(_,i)=>{const n=i-12,o=document.createElement('option');o.value=n;o.textContent=`${n===0?'原调':n>0?`升 ${n} 半音`:`降 ${-n} 半音`} · ${keyName(n)}`;return o;}));
 $('section-chord-style').replaceChildren(...['inherit',...CHORD_STYLES.map(s=>s.id)].map(id=>{const option=document.createElement('option');option.value=id;option.textContent=id==='inherit'?'跟随整曲':chordStyleInfo(id).name;return option;}));
@@ -731,4 +734,94 @@ $('workshop-apply').addEventListener('click', () => {
     const detail = replaced.length ? `${replaced.join('、')}将替换为候选音符。` : '';
     confirmChange(`将更新第 ${session.start + 1}–${session.start + GROUP_SIZE} 小节的所选伴奏。${detail}${options.targets[0] && options.harmony === 'existing' ? '和弦音符保留，只改变演奏方式。' : ''}旋律与其他段落保留，之后可撤销。`, apply, '应用伴奏');
   } else apply();
+});
+
+function closeMelodyWorkshop() {
+  preview.stop(); melodySession = null; melodyPreview = null;
+  if ($('melody-dialog').open) $('melody-dialog').close();
+}
+function melodySettings() {
+  return { mode: $('melody-mode').value, style: $('melody-style').value, density: $('melody-density').value, range: $('melody-range').value, variant: melodySession.variant, enable: $('melody-enable').checked };
+}
+function renderMelodyPreview() {
+  const session = melodySession; if (!session) return;
+  $('melody-original').disabled = !hasAudibleNotes(session.base, session.start, session.start + GROUP_SIZE);
+  $('melody-candidate').disabled = !session.candidate || !hasAudibleNotes(session.candidate, session.start, session.start + GROUP_SIZE);
+  for (const kind of ['original', 'candidate']) $('melody-' + kind).setAttribute('aria-pressed', String(melodyPreview === kind));
+  $('melody-stop').disabled = melodyPreview === null;
+}
+function updateMelodyWorkshop() {
+  const session = melodySession; if (!session) return;
+  preview.stop(); melodyPreview = null; session.request++;
+  const options = melodySettings(), target = melodyTarget(session.start, options.mode); session.settings = options; session.candidate = null;
+  $('melody-density').disabled = options.mode === 'repitch';
+  $('melody-variant').textContent = `候选 ${session.variant + 1}`;
+  $('melody-hint').textContent = options.mode === 'repitch' ? '保留所有起点、休止、时长和力度；密度设置不影响本模式。' : options.mode === 'answer' ? '前两小节原样保留，借用原句的起伏续写后两小节。' : melodyStyleInfo(options.style).hint + '重拍优先选择当前和弦内的音，句尾作收束。';
+  $('melody-summary').replaceChildren(); $('melody-bars').replaceChildren(); $('melody-warning').textContent = '';
+  try {
+    const next = generateMelody(session.base, session.start, options); session.candidate = next;
+    const count = value => value.tracks[0].bars.slice(target.start, target.end).flat().filter(n => n >= 0).length;
+    const details = [`第 ${target.start + 1}–${target.end} 小节旋律：${count(session.base)} → ${count(next)} 个音符。`, options.mode === 'repitch' ? '只调整音高，节奏、时长与力度保留。' : options.mode === 'answer' ? '前两小节旋律原样保留。' : '四小节采用所选风格与密度重新谱写。', '伴奏、其他段落及整曲设置保留。'];
+    if (options.enable) details.push('本段开启旋律。');
+    $('melody-summary').replaceChildren(...details.map(text => { const li = document.createElement('li'); li.textContent = text; return li; }));
+    for (let bar = session.start; bar < session.start + GROUP_SIZE; bar++) {
+      const notes = next.tracks[0].bars[bar].filter(n => n >= 0), card = document.createElement('div'), label = document.createElement('b'), amount = document.createElement('small'), span = document.createElement('small');
+      card.className = 'melody-bar'; label.textContent = `第 ${bar + 1} 小节${bar < target.start ? ' · 保留' : ''}`; amount.textContent = `${notes.length} 个音符`;
+      span.textContent = notes.length ? `${pitchName(next, 0, notes[0], 'notes')} → ${pitchName(next, 0, notes.at(-1), 'notes')}` : '休止'; card.append(label, amount, span); $('melody-bars').append(card);
+    }
+    const warnings = [];
+    const harmony = melodyHarmonyInfo(next, target.start, target.end);
+    if (harmony.emptyBars) warnings.push(`${harmony.emptyBars} 个无和弦小节按当前音阶谱写；已有伴奏保留。`);
+    if (harmony.unmatchedChords.length) warnings.push(`${harmony.unmatchedChords.map(id => chordName(next, id)).join('、')}与当前音阶没有共同音，相关旋律优先使用音阶内音。`);
+    if (!trackAudibleAt(next, 0, session.start)) warnings.push('旋律当前静音，请检查整曲开关、音量及本段开关。');
+    if (options.mode === 'answer') {
+      const preserved = next.tracks[0].bars.slice(session.start, session.start + 2).flat().filter(n => n >= 0);
+      if (preserved.some(n => !inScale(next, n) || (options.range === 'low' && PITCH_VALUES[n] > 12) || (options.range === 'high' && PITCH_VALUES[n] < 12))) warnings.push('保留的原句含音阶外或生成音域外的音，已原样保留。');
+    }
+    $('melody-warning').textContent = warnings.join(' ');
+    const same = JSON.stringify(next) === session.serialized; $('melody-apply').disabled = same; $('melody-next').disabled = false;
+    $('melody-message').textContent = same ? '候选与原版相同，可以换一版或调整设置。' : '候选已准备好；反复试听保持同一版，尚未改动作品。';
+  } catch (error) {
+    $('melody-apply').disabled = $('melody-next').disabled = true; $('melody-message').textContent = error.message;
+  }
+  renderMelodyPreview();
+}
+$('open-melody').addEventListener('click', () => {
+  if (exporting) return; stop();
+  const start = Math.floor(follower.selectedBar / GROUP_SIZE) * GROUP_SIZE, base = clone(state);
+  melodySession = { base, start, serialized: JSON.stringify(base), candidate: null, settings: null, variant: 0, request: 0 }; melodyPreview = null;
+  $('melody-range-label').textContent = `「${base.sections[start / GROUP_SIZE].name}」· 第 ${start + 1}–${start + GROUP_SIZE} 小节 · ${keyName(base.transpose)} ${scaleInfo(base.scale).name}`;
+  updateMelodyWorkshop(); $('melody-dialog').showModal();
+});
+$('close-melody').addEventListener('click', closeMelodyWorkshop);
+$('melody-dialog').addEventListener('cancel', closeMelodyWorkshop);
+$('melody-dialog').addEventListener('close', () => { if (!$('melody-dialog').open) closeMelodyWorkshop(); });
+for (const id of ['melody-mode', 'melody-style', 'melody-density', 'melody-range', 'melody-enable']) $(id).addEventListener('change', updateMelodyWorkshop);
+$('melody-next').addEventListener('click', () => { if (!melodySession) return; melodySession.variant = (melodySession.variant + 1) >>> 0; updateMelodyWorkshop(); });
+async function auditionMelody(kind) {
+  const session = melodySession; if (!session) return;
+  preview.stop(); const request = ++session.request, value = kind === 'original' ? session.base : session.candidate; if (!value) return;
+  $('melody-message').textContent = `正在准备${kind === 'original' ? '原版' : '候选'}四小节试听…`;
+  try {
+    const started = await preview.playSection(value, session.start, active => {
+      if (melodySession !== session || session.request !== request) return;
+      melodyPreview = active ? kind : null; renderMelodyPreview();
+      $('melody-message').textContent = active ? `正在试听${kind === 'original' ? '原版' : '候选 ' + (session.variant + 1)}，作品尚未改动。` : '试听已停止，作品内容保留。';
+    });
+    if (!started && melodySession === session && session.request === request && melodyPreview === null) $('melody-message').textContent = '当前没有可听内容，请检查声部开关及音量。';
+  } catch { if (melodySession === session && session.request === request) $('melody-message').textContent = '浏览器未能启动试听，候选保留，可以重试。'; }
+}
+$('melody-original').addEventListener('click', () => auditionMelody('original'));
+$('melody-candidate').addEventListener('click', () => auditionMelody('candidate'));
+$('melody-stop').addEventListener('click', () => { preview.stop(); if (melodySession) melodySession.request++; });
+$('melody-apply').addEventListener('click', () => {
+  const session = melodySession; if (!session?.candidate) return; preview.stop();
+  const next = clone(session.candidate), options = session.settings, target = melodyTarget(session.start, options.mode);
+  const apply = () => {
+    if (melodySession !== session || JSON.stringify(state) !== session.serialized) { closeMelodyWorkshop(); status('作品已变化，请重新打开旋律工坊生成候选。'); return; }
+    closeMelodyWorkshop(); selectedNote = null; selectedTrack = 0; pitchRange = options.range;
+    const message = `旋律已应用到第 ${target.start + 1}–${target.end} 小节；伴奏保留，可继续编辑，撤销可恢复。`;
+    commit(next, message); selectBar(target.start); savePreferences(message);
+  };
+  if (session.base.tracks[0].bars.slice(target.start, target.end).some(bar => bar.some(n => n >= 0))) confirmChange(`将${options.mode === 'repitch' ? '调整' : '替换'}第 ${target.start + 1}–${target.end} 小节的旋律${options.mode === 'repitch' ? '音高，节奏、时长与力度保留' : '音符'}。${options.mode === 'answer' ? '前两小节原样保留。' : ''}伴奏与其他段落保留，之后可以撤销。`, apply, '应用旋律'); else apply();
 });

@@ -1,0 +1,36 @@
+{
+  "version": "0.11.0",
+  "date": "2026-10-20",
+  "environment": "Windows desktop Chromium in-app browser; 390 × 844 CSS-pixel emulation, not a physical phone",
+  "automatedTests": {
+    "total": 157,
+    "passed": 157,
+    "newMelodyTests": 21,
+    "compatibility": "Frozen v0.7.0–v0.10.0 conversions; schemas 1–10; storage keys unchanged",
+    "scope": "Styles, densities, scales, ranges, variants, 19 chords, no-common-tone fallback, preservation, 25 transpositions, cancellation, stereo PCM comparison, 32-bar WAV and independent MP3 decoding"
+  },
+  "browser": {
+    "library": "13 existing works retained; one newly saved melody work, total 14",
+    "previewPurity": "Shared snapshot before and after original/candidate audition, rapid switching, stop and close is identical",
+    "variant": "Next changes candidate 1 to 2 and changes bar summaries; replay keeps candidate fixed",
+    "compose": "Only melody bars 1–4 change; full backing and melody outside section preserved by decoded share comparison",
+    "answer": "Prefix bars 1–2 including durations and velocities exactly retained; backing preserved",
+    "repitch": "Density disabled; all onset/rest positions, durations and velocities retained while pitches change",
+    "confirmation": "Cancel keeps workshop open; confirm applies; undo restores exact original share and redo exact generated share",
+    "empty": "Answer/repitch reject empty source; compose offers scale-only candidate and no-chord warning",
+    "escape": "Esc closes workshop during audition and main playback stays stopped",
+    "persistence": "Generated work expanded by repetition to 32 bars, saved and reloaded; share reopens identical snapshot",
+    "exports": "32-bar MP3 and WAV generation completed with expected filenames; cancel reports work retained",
+    "consoleErrors": []
+  },
+  "responsive": {
+    "viewport": [390, 844],
+    "documentClientWidth": 375,
+    "documentScrollWidth": 375,
+    "dialogClientWidth": 322,
+    "dialogScrollWidth": 322,
+    "verticalScrolling": "Apply below initial fold; locator scrolls to it successfully, opens overwrite prompt, and cancel returns to workshop"
+  },
+  "screenshots": ["yinya-v0.11.0-desktop.jpg", "yinya-v0.11.0-mobile.jpg"],
+  "limits": ["Only selected four-bar section", "No cross-bar sustains", "Global timbres, volume, tempo and tonality", "Rule candidates require listening", "Physical-phone and multi-browser long-piece performance unverified"]
+}
