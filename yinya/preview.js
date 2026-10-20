@@ -4,7 +4,7 @@ import { Config } from '../synth/SynthConfig.ts';
 import { audioSong } from './song.js';
 import { TRACKS, CHORDS, GROUP_SIZE, songJSON, validate, pitchedNoteAt, LONG_NOTE_TRACKS, chordNotes, sectionChordStyle, trackAudibleAt, hasAudibleNotes } from './model.js';
 import { releaseSeconds, voiceInfo, chordReleaseSeconds, chordVoiceInfo, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
-import { AudioRenderer, phraseState, fadeEnd } from './render.js';
+import { AudioRenderer, phraseState, sectionState, fadeEnd } from './render.js';
 
 export const PREVIEW_SECONDS = .32;
 const HOLD_SECONDS = .25;
@@ -111,9 +111,15 @@ export class PreviewPlayer {
     catch (error) { source.onended = null; source.disconnect(); gain.disconnect(); throw error; }
     this.active = { source, gain };
   }
-  async playPhrase(value, start, changed = () => {}, mode = 'melody') {
-    this.stop(); const generation = this.generation, state = phraseState(value, start, mode);
-    if (!hasAudibleNotes(state, 0, GROUP_SIZE, [0, 1])) return false;
+  playPhrase(value, start, changed = () => {}, mode = 'melody') {
+    return this.playSnapshot(() => phraseState(value, start, mode), changed, [0, 1]);
+  }
+  playSection(value, start, changed = () => {}) {
+    return this.playSnapshot(() => sectionState(value, start), changed, [0, 1, 2, 3]);
+  }
+  async playSnapshot(makeState, changed, indices) {
+    this.stop(); const generation = this.generation, state = makeState();
+    if (!hasAudibleNotes(state, 0, GROUP_SIZE, indices)) return false;
     this.phraseChanged = changed; changed(true);
     try {
       const context = this.context || (this.context = this.createContext());

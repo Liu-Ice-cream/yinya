@@ -4,6 +4,7 @@ import { audioSong } from './song.js';
 import { VOICES, voiceInfo, CHORD_VOICES, chordVoiceInfo, BASS_VOICES, bassVoiceInfo } from './voices.js';
 import { TRACKS, PRESETS, GROUP_SIZE, BAR_COUNTS, NOTE_LENGTHS, MAX_BACKUP_BYTES, parseBackup, LONG_NOTE_TRACKS, CHORD_STYLES, chordStyleInfo, VELOCITIES, sectionChordStyle, setSectionChordStyle, setNoteVelocity, applyDrumPattern, setScale, setTranspose, shiftOctave, applyProgression, renameSection, setSectionTrack, insertSection, moveSection, deleteSection, trackAudibleAt, hasAudibleNotes, blank, preset, validate, resize, rangeHasNotes, copyGroup, copyBar, pitchedNoteAt, setPitchedNote, removePitchedNote, encode, decode, songJSON, wavBuffer } from './model.js';
 import { SCALES, PROGRESSIONS, scaleInfo, inScale, keyName, pitchName, chordName, pitchRows, chordRows } from './theory.js';
+import { BASS_PATTERNS, ACCOMPANIMENT_STYLES, bassPatternInfo, accompanimentStyleInfo, generateAccompaniment, harmonicRuns } from './accompaniment.js';
 import { DRUM_PATTERNS } from './grooves.js';
 import { PreviewPlayer } from './preview.js';
 import { PlaybackFollower, playbackPosition, playbackRange, configurePlayback } from './playback.js';
@@ -17,6 +18,7 @@ let state = preset('sprout'), activeId = null, selectedTrack = 0, library = [], 
 let synth = new Synth(), lastStep = -1, consumedShare = false;
 let exportJob = null;
 let pendingConfirmation = null;
+let workshopSession = null, workshopPreview = null;
 let selectedNote = null;
 const newNoteLengths = { 0: 1, 2: 1 };
 const newNoteVelocities = { 0: 1, 2: 1 };
@@ -87,6 +89,7 @@ function draftSave() {
 function snapshot() { return { state: clone(state), id: activeId, bar: follower.selectedBar }; }
 function commit(next, message, id = activeId) {
   const clean = validate(next);
+  if (workshopSession) closeWorkshop();
   preview.stop();
   history.push(snapshot()); if (history.length > 100) history.shift(); future.length = 0;
   state = clean; activeId = id;
@@ -126,6 +129,7 @@ function renderTracks() {
 function renderControls() {
   const t = TRACKS[selectedTrack], layer = state.tracks[selectedTrack];
   renderTheoryControls();
+  $('open-workshop').disabled = exporting;
   $('title').value = state.title; $('tempo').value = state.tempo;
   $('bar-count').value = state.barCount;
   $('length-fill').disabled = state.barCount === 32;
@@ -497,12 +501,13 @@ $('cancel-export').addEventListener('click', () => {
   if (!exportJob) return;
   exportJob.canceled = true; exportJob.renderer.canceled = true; exportJob.worker?.terminate(); exportJob.reject?.(new DOMException('已取消', 'AbortError'));
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { preview.dispose(); if (synth.playing) { stop(); status('切到后台后已暂停，回来按播放即可继续。'); } } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { preview.dispose(); if (workshopSession) workshopSession.request++; if (synth.playing) { stop(); status('切到后台后已暂停，回来按播放即可继续。'); } } });
 window.addEventListener('pagehide', () => preview.dispose());
 document.addEventListener('keydown', e => {
   if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(document.activeElement?.tagName) || document.querySelector('dialog[open]')) return;
   if (e.code === 'Space') { e.preventDefault(); $('play').click(); }
 });
+for (const [id, choices] of [['workshop-bass', BASS_PATTERNS], ['workshop-style', ACCOMPANIMENT_STYLES]]) $(id).replaceChildren(...choices.map(choice => { const option = document.createElement('option'); option.value = choice.id; option.textContent = choice.name; return option; }));
 $('scale').replaceChildren(...SCALES.map(scale=>{const o=document.createElement('option');o.value=scale.id;o.textContent=scale.name;return o;}));
 $('transpose').replaceChildren(...Array.from({length:25},(_,i)=>{const n=i-12,o=document.createElement('option');o.value=n;o.textContent=`${n===0?'原调':n>0?`升 ${n} 半音`:`降 ${-n} 半音`} · ${keyName(n)}`;return o;}));
 $('section-chord-style').replaceChildren(...['inherit',...CHORD_STYLES.map(s=>s.id)].map(id=>{const option=document.createElement('option');option.value=id;option.textContent=id==='inherit'?'跟随整曲':chordStyleInfo(id).name;return option;}));
@@ -621,3 +626,109 @@ $('apply-progression').addEventListener('click',()=>{
 });
 
 $('chord-palette').addEventListener('change',e=>{preview.stop();chordPalette=e.target.value;renderGrid();syncPlayback();status('和弦显示范围已更新；已有和弦保留。');});
+
+function closeWorkshop() {
+  preview.stop(); workshopSession = null; workshopPreview = null;
+  if ($('workshop-dialog').open) $('workshop-dialog').close();
+}
+function workshopSettings() {
+  const bassOnly = $('workshop-mode').value === 'bass';
+  return { mode: bassOnly ? 'bass' : 'ensemble', style: $('workshop-style').value, bassPattern: $('workshop-bass').value,
+    harmony: bassOnly ? 'existing' : $('workshop-source').value,
+    targets: bassOnly ? [false, true, false] : ['workshop-chords', 'workshop-bass-target', 'workshop-drums'].map(id => $(id).checked), enable: $('workshop-enable').checked };
+}
+function renderWorkshopPreview() {
+  if (!workshopSession) return;
+  const session = workshopSession;
+  $('workshop-original').disabled = !hasAudibleNotes(session.base, session.start, session.start + GROUP_SIZE);
+  $('workshop-candidate').disabled = !session.candidate || !hasAudibleNotes(session.candidate, session.start, session.start + GROUP_SIZE);
+  $('workshop-original').setAttribute('aria-pressed', String(workshopPreview === 'original'));
+  $('workshop-candidate').setAttribute('aria-pressed', String(workshopPreview === 'candidate'));
+  $('workshop-stop').disabled = workshopPreview === null;
+}
+function updateWorkshop() {
+  if (!workshopSession) return;
+  preview.stop(); workshopPreview = null; workshopSession.request++;
+  const session = workshopSession, bassOnly = $('workshop-mode').value === 'bass';
+  $('workshop-dialog').classList.toggle('ensemble', !bassOnly);
+  $('workshop-style-field').hidden = $('workshop-source-field').hidden = $('workshop-targets').hidden = bassOnly;
+  if (!bassOnly && !$('workshop-chords').checked) $('workshop-source').value = 'existing';
+  $('workshop-source').disabled = !bassOnly && !$('workshop-chords').checked;
+  const options = workshopSettings(); session.settings = options; session.candidate = null;
+  $('workshop-bass').disabled = !options.targets[1];
+  $('workshop-bass-hint').textContent = options.targets[1] ? bassPatternInfo(options.bassPattern).hint + '每小节首个和弦前和全空小节留白。' : '贝斯保持原样；可勾选贝斯一起搭配。';
+  $('workshop-summary').replaceChildren(); $('workshop-warning').textContent = '';
+  try {
+    const next = generateAccompaniment(session.base, session.start, options); session.candidate = next;
+    const details = [];
+    const count = (value, track) => value.tracks[track].bars.slice(session.start, session.start + GROUP_SIZE).flat().reduce((n, pitch) => n + (track === 3 ? Number(pitch > 0) : Number(pitch >= 0)), 0);
+    if (options.targets[0]) details.push(options.harmony === 'style' ? `和弦：${next.tracks[1].bars.slice(session.start, session.start + GROUP_SIZE).map(bar => chordName(next, bar[0])).join(" → ")}，${chordStyleInfo(next.sections[session.start / GROUP_SIZE].chordStyle).name}。` : `和弦：保留现有音符，改用${chordStyleInfo(next.sections[session.start / GROUP_SIZE].chordStyle).name}。`);
+    if (options.targets[1]) details.push(`贝斯：${count(session.base, 2)} → ${count(next, 2)} 个音符，${bassPatternInfo(options.bassPattern).name}。`);
+    if (options.targets[2]) details.push(`鼓点：填入${accompanimentStyleInfo(options.style).name}节奏，并在最后一小节加过门。`);
+    if (options.enable) details.push('本段开启所选声部。');
+    details.push('旋律、其他段落与整曲设置保留。');
+    $('workshop-summary').replaceChildren(...details.map(text => { const li = document.createElement('li'); li.textContent = text; return li; }));
+    const warnings = [];
+    const muted = options.targets.flatMap((chosen, index) => chosen && !trackAudibleAt(next, index + 1, session.start) ? [TRACKS[index + 1].name] : []);
+    if (muted.length) warnings.push(`${muted.join('、')}当前静音：请检查整曲开关、音量及本段开关。`);
+    if (options.targets[1]) { const silent = next.tracks[1].bars.slice(session.start, session.start + GROUP_SIZE).filter(bar => !harmonicRuns(bar).length).length; if (silent) warnings.push(`${silent} 个空白和弦小节的贝斯将留白。`); }
+    $('workshop-warning').textContent = warnings.join(' ');
+    const same = JSON.stringify(next) === session.serialized;
+    $('workshop-apply').disabled = same;
+    $('workshop-message').textContent = same ? '候选与原版相同，调整设置后再试。' : '候选已准备好，尚未改动作品。可先试听比较，再应用。';
+  } catch (error) {
+    $('workshop-apply').disabled = true; $('workshop-message').textContent = error.message;
+  }
+  renderWorkshopPreview();
+}
+$('open-workshop').addEventListener('click', () => {
+  if (exporting) return;
+  stop();
+  const start = Math.floor(follower.selectedBar / GROUP_SIZE) * GROUP_SIZE, base = clone(state);
+  workshopSession = { base, start, serialized: JSON.stringify(base), candidate: null, settings: null, request: 0 };
+  workshopPreview = null;
+  $('workshop-range').textContent = `「${base.sections[start / GROUP_SIZE].name}」· 第 ${start + 1}–${start + GROUP_SIZE} 小节`;
+  updateWorkshop(); $('workshop-dialog').showModal();
+});
+$('close-workshop').addEventListener('click', closeWorkshop);
+$('workshop-dialog').addEventListener('cancel', closeWorkshop);
+$('workshop-dialog').addEventListener('close', () => { if (!$('workshop-dialog').open) closeWorkshop(); });
+for (const id of ['workshop-bass', 'workshop-source', 'workshop-chords', 'workshop-bass-target', 'workshop-drums', 'workshop-enable']) $(id).addEventListener('change', updateWorkshop);
+$('workshop-mode').addEventListener('change', () => { if ($('workshop-mode').value === 'ensemble') $('workshop-bass').value = accompanimentStyleInfo($('workshop-style').value).bass; updateWorkshop(); });
+$('workshop-style').addEventListener('change', () => { $('workshop-bass').value = accompanimentStyleInfo($('workshop-style').value).bass; updateWorkshop(); });
+async function auditionWorkshop(kind) {
+  const session = workshopSession; if (!session) return;
+  preview.stop(); const request = ++session.request;
+  const value = kind === 'original' ? session.base : session.candidate;
+  if (!value) return;
+  $('workshop-message').textContent = `正在准备${kind === 'original' ? '原版' : '候选'}四小节试听…`;
+  try {
+    const started = await preview.playSection(value, session.start, active => {
+      if (workshopSession !== session || session.request !== request) return;
+      workshopPreview = active ? kind : null; renderWorkshopPreview();
+      $('workshop-message').textContent = active ? `正在试听${kind === 'original' ? '原版' : '候选'}，作品尚未改动。` : '试听已停止，作品内容保留。';
+    });
+    if (!started && workshopSession === session && session.request === request && workshopPreview === null) $('workshop-message').textContent = '当前声部无可听内容，请检查本段开关、整曲开关及音量。';
+  } catch {
+    if (workshopSession === session && session.request === request) $('workshop-message').textContent = '浏览器未能启动试听；候选保留，可重试或应用后播放。';
+  }
+}
+$('workshop-original').addEventListener('click', () => auditionWorkshop('original'));
+$('workshop-candidate').addEventListener('click', () => auditionWorkshop('candidate'));
+$('workshop-stop').addEventListener('click', () => { preview.stop(); if (workshopSession) workshopSession.request++; });
+$('workshop-apply').addEventListener('click', () => {
+  const session = workshopSession; if (!session?.candidate) return;
+  preview.stop();
+  const next = clone(session.candidate), options = session.settings;
+  const apply = () => {
+    if (workshopSession !== session || JSON.stringify(state) !== session.serialized) { closeWorkshop(); status('作品已变化，请重新打开伴奏工坊生成候选。'); return; }
+    closeWorkshop(); selectedNote = null;
+    commit(next, `伴奏已应用到第 ${session.start + 1}–${session.start + GROUP_SIZE} 小节；旋律保留，可继续编辑，撤销可恢复。`);
+  };
+  const existing = options.targets.some((chosen, index) => chosen && session.base.tracks[index + 1].bars.slice(session.start, session.start + GROUP_SIZE).some(bar => bar.some(n => index === 2 ? n > 0 : n >= 0)));
+  if (existing) {
+    const replaced = options.targets.flatMap((chosen, index) => chosen && (index !== 0 || options.harmony === 'style') ? [TRACKS[index + 1].name] : []);
+    const detail = replaced.length ? `${replaced.join('、')}将替换为候选音符。` : '';
+    confirmChange(`将更新第 ${session.start + 1}–${session.start + GROUP_SIZE} 小节的所选伴奏。${detail}${options.targets[0] && options.harmony === 'existing' ? '和弦音符保留，只改变演奏方式。' : ''}旋律与其他段落保留，之后可撤销。`, apply, '应用伴奏');
+  } else apply();
+});

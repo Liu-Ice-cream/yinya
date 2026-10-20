@@ -4,18 +4,22 @@ import { audioSong } from './song.js';
 import { validate, songJSON, GROUP_SIZE, trackAudibleAt } from './model.js';
 import { voiceInfo, releaseSeconds, chordVoiceInfo, chordReleaseSeconds, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
 
-export function phraseState(value, start, mode = 'melody') {
-  if (!['melody', 'duet'].includes(mode)) throw new Error('段落试听模式无效');
+export function sectionState(value, start) {
   const state = validate(value);
   if (!Number.isInteger(start) || start < 0 || start % GROUP_SIZE || start + GROUP_SIZE > state.barCount) throw new Error('试听段落无效');
   state.sections = state.sections.slice(start / GROUP_SIZE, start / GROUP_SIZE + 1);
   state.barCount = GROUP_SIZE;
-  state.tracks.forEach((track, index) => {
-    track.enabled = (index === 0 || (mode === 'duet' && index === 1)) && track.enabled;
+  state.tracks.forEach(track => {
     track.bars = track.bars.slice(start, start + GROUP_SIZE);
     if (track.durations) track.durations = track.durations.slice(start, start + GROUP_SIZE);
     if (track.velocities) track.velocities = track.velocities.slice(start, start + GROUP_SIZE);
   });
+  return state;
+}
+export function phraseState(value, start, mode = 'melody') {
+  if (!['melody', 'duet'].includes(mode)) throw new Error('段落试听模式无效');
+  const state = sectionState(value, start);
+  state.tracks.forEach((track, index) => { track.enabled = (index === 0 || (mode === 'duet' && index === 1)) && track.enabled; });
   return state;
 }
 export function fadeEnd(left, right, count) {

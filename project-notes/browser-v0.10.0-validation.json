@@ -1,0 +1,46 @@
+{
+  "version": "0.10.0",
+  "date": "2026-10-20",
+  "environment": "Windows desktop Chromium in-app browser; 390 × 844 CSS-pixel responsive emulation, not a physical phone",
+  "automatedTests": {
+    "total": 136,
+    "passed": 136,
+    "newAccompanimentTests": 21,
+    "compatibility": "Frozen v0.7.0, v0.8.0, v0.9.0 canonical song conversions; schemas 1–10",
+    "scope": "19 chords × three bass patterns; all nonempty target combinations; scales and transpositions; rests, silence, async cancellation, 32-bar WAV and independent MP3 decoding"
+  },
+  "browser": {
+    "existingLibrary": "12 existing works retained; one newly saved accompaniment work, total 13",
+    "previewPurity": "Shared snapshot URL before and after original/candidate audition is identical",
+    "bassOnly": "Only bars 5–8 bass changed from 8 to 16 onsets; melody, chords, drums and outside bass bars retained",
+    "undoRedo": "Undo restores the exact pre-generation shared snapshot; redo reapplies",
+    "choices": "All three style defaults, bass override, existing/style harmony source, source disabled when chords deselected, no-target rejection and empty-harmony guidance",
+    "blankWork": "Style harmony plus all selected tracks generates an ordinary four-bar work; undo restores blank",
+    "ensemble": "Minor, transpose -3; bars 9–12 become Am–C–F–G with staccato and octave bass; original melody and all bars outside that section verified unchanged via shared snapshots",
+    "close": "Esc closes the workshop during candidate audition and main playback remains stopped",
+    "persistence": "Generated project expanded to 32 bars, saved and reloaded; own share reopens minor, -3 and section staccato",
+    "exports": "Full 32-bar MP3 and WAV generated with correct filenames; cancel leaves work intact",
+    "consoleErrors": []
+  },
+  "responsive": {
+    "viewportWidth": 390,
+    "viewportHeight": 844,
+    "documentClientWidth": 375,
+    "documentScrollWidth": 375,
+    "dialogClientWidth": 322,
+    "dialogScrollWidth": 322,
+    "verticalScrolling": "Internal scrolling retains reachable settings, comparison buttons and apply; overwrite prompt opened and canceled successfully"
+  },
+  "screenshots": [
+    "yinya-v0.10.0-desktop.jpg",
+    "yinya-v0.10.0-bass.jpg",
+    "yinya-v0.10.0-mobile.jpg"
+  ],
+  "limits": [
+    "Rules propose an accompaniment rather than guarantee melodic suitability",
+    "Only selected four-bar section and chosen accompaniment tracks change",
+    "Existing schema 10 and storage keys retained; no automatic regeneration after manual chord edits",
+    "Global timbres, volume, tempo and tonality remain shared; notes stay within a bar",
+    "Physical-phone and multi-browser long-piece performance remain unverified"
+  ]
+}
