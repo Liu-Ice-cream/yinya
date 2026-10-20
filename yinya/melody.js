@@ -1,4 +1,4 @@
-// Original, local melody rules. Candidates are ordinary schema-10 notes.
+// Original, local melody rules. Candidates are ordinary editable notes.
 import { validate, GROUP_SIZE, CHORDS } from './model.js';
 import { PITCH_VALUES, pitchId, scaleInfo } from './theory.js';
 import { harmonicRuns } from './accompaniment.js';

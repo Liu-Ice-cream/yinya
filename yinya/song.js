@@ -11,7 +11,9 @@ export function audioSong(json) {
       if (![.55, 1, 1.35].includes(gain)) throw new Error('音符力度超出支持范围');
       const chordGain=json.channels[c].patterns[p].notes[n]?.yinyaChordGain ?? 1;
       if (![1,Math.sqrt(3/4)].includes(chordGain)) throw new Error('和弦强度无效');
-      if (gain * chordGain !== 1) for (const pin of note.pins) pin.size *= Math.pow(gain * chordGain, 2 / 3);
+      const sectionGain=json.channels[c].patterns[p].notes[n]?.yinyaSectionGain ?? 1;
+      if (!Number.isFinite(sectionGain)||sectionGain<0||sectionGain>1) throw new Error('段落音量无效');
+      if (gain * chordGain * sectionGain !== 1) for (const pin of note.pins) pin.size *= Math.pow(gain * chordGain * sectionGain, 2 / 3);
     });
   }));
   return song;

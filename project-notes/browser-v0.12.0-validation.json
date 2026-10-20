@@ -1,0 +1,34 @@
+{
+  "version": "0.12.0",
+  "date": "2026-10-20",
+  "environment": "Windows desktop Chromium in-app browser; 390 × 844 CSS-pixel emulation, not a physical phone",
+  "automatedTests": {
+    "total": 177,
+    "passed": 177,
+    "newOrchestrationTests": 20,
+    "compatibility": "Frozen v0.7.0–v0.11.0 canonical audio conversions; old schemas migrate to v11 with inherited voices and 100% relative levels",
+    "audio": "Parsed per-pattern instrument selection for all revisions; relative gain combined with velocity and chord calibration; actual single-note and full-song stereo PCM reference at 44100 / 48000 Hz; released notes across section boundary, actual final timbre, cancellation, 32-bar WAV and independently decoded MP3"
+  },
+  "browser": {
+    "migration": "14 existing works retained; current old draft opens with schema 11, all voices inherited and all levels 100%; old keys remain untouched by migration code",
+    "scope": "Share payload confirms voice/level edits preserve all four tracks and every other section",
+    "globalAndLocal": "Local acoustic guitar remains after global electric-piano change; inherited theme switches to electric piano; sidebar actual-timbre hint follows section selection",
+    "preview": "Full four-track section preview starts and stops; before/after share URL identical; editing a voice stops preview",
+    "resetUndoRedo": "Reset returns exact original share snapshot; undo returns exact independently orchestrated snapshot; redo restores reset snapshot",
+    "duplication": "Duplicate theme creates a 20-bar project with exact copied voice and level arrays",
+    "cards": "Both examples display effective timbres and reduced relative levels; setting theme drums to 0 removes drums from audible summary",
+    "persistence": "One newly saved 32-bar work, library total 15; reload retains repeated voice/level arrays and exact own share reopens",
+    "exports": "Complete 32-bar MP3 and WAV generated with expected filenames; cancel leaves exact shared snapshot unchanged",
+    "consoleErrors": []
+  },
+  "responsive": {
+    "viewport": [390, 844],
+    "documentClientWidth": 375,
+    "documentScrollWidth": 375,
+    "panelClientWidth": 317,
+    "panelScrollWidth": 317,
+    "controls": "Two-column cards, voice selection, relative-volume slider, audition and stop usable; normal page scrolling"
+  },
+  "screenshots": ["yinya-v0.12.0-desktop.jpg", "yinya-v0.12.0-mobile.jpg"],
+  "limits": ["Four-bar sections and maximum 32 bars", "Global tempo and tonality", "No cross-bar sustain editing or gain automation curves", "No new drum kit or sample dependencies", "Physical-phone and multi-browser long-piece performance unverified"]
+}

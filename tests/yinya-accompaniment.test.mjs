@@ -79,13 +79,13 @@ test('invalid settings and ranges are rejected without mutating the original wor
   for(const settings of [null,[],{mode:'other'},{style:'other'},{bassPattern:'other'},{mode:'bass',harmony:'style'},{enable:1},ensemble('pop-v1',{targets:[false,false,false]}),ensemble('pop-v1',{targets:[true,1,false]}),ensemble('pop-v1',{targets:[true,true]}),ensemble('pop-v1',{harmony:'other'})])assert.throws(()=>generateAccompaniment(s,0,settings));
   for(const start of [-4,1,14,16,0.5])assert.throws(()=>generateAccompaniment(s,start));assert.deepEqual(s,before);
 });
-test('candidate generation is deterministic, independent and produces ordinary schema ten data',()=>{
-  const s=preset('tone-day'),before=structuredClone(s),a=generateAccompaniment(s,4,ensemble()),b=generateAccompaniment(s,4,ensemble());assert.deepEqual(a,b);assert.equal(a.version,10);
+test('candidate generation is deterministic, independent and produces ordinary current-schema data',()=>{
+  const s=preset('tone-day'),before=structuredClone(s),a=generateAccompaniment(s,4,ensemble()),b=generateAccompaniment(s,4,ensemble());assert.deepEqual(a,b);assert.equal(a.version,11);
   a.tracks[2].bars[4][0]=0;assert.deepEqual(s,before);assert.deepEqual(b,generateAccompaniment(s,4,ensemble()));assert.ok(!('accompaniment' in b));
 });
 test('frozen v0.9.0 major and minor projects retain byte-identical canonical song conversion',async()=>{
   const fixture=JSON.parse(await readFile(new URL('./fixtures/yinya-v090-compat.json',import.meta.url)));
-  for(const {state,songSha256} of fixture.cases){assert.deepEqual(validate(state),state);assert.equal(createHash('sha256').update(JSON.stringify(canonical(songJSON(state)))).digest('hex'),songSha256);}
+  for(const {state,songSha256} of fixture.cases){assert.deepEqual(validate(state).tracks,state.tracks);assert.equal(createHash('sha256').update(JSON.stringify(canonical(songJSON(state)))).digest('hex'),songSha256);}
 });
 test('generated notes and local performance persist through sharing, backups, copies and rearrangement within existing limits',()=>{
   let s=resize(setTranspose(preset('tone-dusk'),5),32,'repeat');for(let start=0;start<32;start+=4)s=generateAccompaniment(s,start,ensemble('electro-v1',{harmony:'style'}));s.title='音芽🌱'.repeat(10);s.sections.forEach(p=>p.name='段落🌱'.repeat(6));

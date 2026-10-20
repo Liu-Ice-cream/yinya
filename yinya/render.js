@@ -1,7 +1,7 @@
 import { Synth } from '../synth/synth.ts';
 import { SongRenderer } from '../editor/SongRenderer.ts';
 import { audioSong } from './song.js';
-import { validate, songJSON, GROUP_SIZE, trackAudibleAt } from './model.js';
+import { validate, songJSON, GROUP_SIZE, trackAudibleAt, sectionVoice } from './model.js';
 import { voiceInfo, releaseSeconds, chordVoiceInfo, chordReleaseSeconds, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
 
 export function sectionState(value, start) {
@@ -37,19 +37,16 @@ export class AudioRenderer {
     this.tailSeconds = 0;
     const json = songJSON(state);
     for (const index of [0, 1, 2]) {
-      const track = state.tracks[index], id = index === 0 ? state.voice : index === 1 ? state.chordVoice : state.bassVoice;
-      const voice = index === 0 ? voiceInfo(id) : index === 1 ? chordVoiceInfo(id) : bassVoiceInfo(id);
-      if (voice.legacy || !track.enabled || track.volume === 0) continue;
-      let lastEnd = 0;
       json.channels[index].patterns.forEach((pattern, bar) => {
         if (!trackAudibleAt(state,index,bar)) return;
-        for (const note of pattern.notes) lastEnd = Math.max(lastEnd,bar * 16 + note.points.at(-1).tick);
+        const id=sectionVoice(state,index,bar),voice=[voiceInfo,chordVoiceInfo,bassVoiceInfo][index](id);
+        if(voice.legacy||!pattern.notes.length)return;
+        hasNewVoice = true;
+        const lastEnd=bar*16+Math.max(...pattern.notes.map(note=>note.points.at(-1).tick));
+        const silence=(state.barCount*16-lastEnd)*60/state.tempo/4;
+        const release=[releaseSeconds,chordReleaseSeconds,bassReleaseSeconds][index](id,state.tempo);
+        if(ending==='natural')this.tailSeconds=Math.max(this.tailSeconds,release-silence);
       });
-      if (!lastEnd) continue;
-      hasNewVoice = true;
-      const silence = (state.barCount * 16 - lastEnd) * 60 / state.tempo / 4;
-      const release = index === 0 ? releaseSeconds(id, state.tempo) : index === 1 ? chordReleaseSeconds(id, state.tempo) : bassReleaseSeconds(id,state.tempo);
-      if (ending === 'natural') this.tailSeconds = Math.max(this.tailSeconds, release - silence);
     }
     if (this.tailSeconds) {
       json.loopBars++;
