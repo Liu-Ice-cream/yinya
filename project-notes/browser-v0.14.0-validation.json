@@ -1,0 +1,25 @@
+{
+  "version": "0.14.0",
+  "date": "2026-10-21",
+  "browser": "Chromium in-app browser",
+  "scope": "Local app; original preset-derived test work only",
+  "passed": [
+    "v11 draft and all 16 existing library works load after v12 migration",
+    "Sustained melody appears as one 24-step object across a bar line",
+    "Split at bar line selects both resulting notes; joining restores exact share snapshot",
+    "32-step resize collision rejects whole edit with exact source snapshot retained",
+    "Selected-length change applies captured choice; undo restores exact source snapshot",
+    "Single-bar incoming hold click returns to onset and selects complete note",
+    "Deleting selected hold removes whole object; undo restores exact snapshot",
+    "Actual mouse resize changes 24-step cross-bar note to 16 steps",
+    "Actual mouse drag moves complete 16-step held note by four steps",
+    "Undoing both mouse edits restores exact source snapshot",
+    "32-bar original test work saves as new library work 17 and reloads intact",
+    "Four-voice audition and full playback use continuation notes",
+    "32-bar MP3 and WAV reach ready download state",
+    "390x844 viewport: no page overflow; internal roll scroll retained",
+    "Narrow viewport split and join buttons change selection count 1 to 2 to 1"
+  ],
+  "automated": {"tests":225,"pcmRates":[44100,48000],"voices":9,"mp3IndependentDecode":true},
+  "limits": ["Physical touch device not tested", "Holds remain inside a four-bar section", "Older app versions cannot read schema 12"]
+}

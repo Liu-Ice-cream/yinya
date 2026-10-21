@@ -21,7 +21,7 @@ function bass(voice='square',pitch=3,length=8){const s=setPitchedNote(blank(),2,
 test('frozen v0.7.0 fixtures retain exact original song conversion for v1-v8, including arranged sections',async()=>{
   const fixture=JSON.parse(await readFile(new URL('./fixtures/yinya-v070-compat.json',import.meta.url)));
   for(const {state,songSha256} of fixture.cases){const before=structuredClone(state),next=validate(state);
-    assert.equal(next.version,11);assert.equal(next.bassVoice,'square');assert.ok(next.sections.every(p=>p.chordStyle==='inherit'));
+    assert.equal(next.version,12);assert.equal(next.bassVoice,'square');assert.ok(next.sections.every(p=>p.chordStyle==='inherit'));
     assert.ok(next.tracks.filter(t=>t.velocities).every(t=>t.velocities.flat().every(n=>n===1)));
     assert.equal(createHash('sha256').update(JSON.stringify(canonical(songJSON(next)))).digest('hex'),songSha256);assert.deepEqual(state,before);
   }
@@ -136,7 +136,7 @@ test('32-bar WAV and independently decoded MP3 keep strong new bass and its fina
 });
 
 test('three complete original examples render and persist all performance settings within existing backup and share limits',async()=>{
-  for(const id of ['groove-pop','groove-night','groove-pixel']){let s=preset(id);assert.equal(s.barCount,16);assert.equal(s.version,11);assert.equal(new Set(s.sections.map(p=>p.name)).size,4);assert.ok(s.tracks[0].velocities.flat().includes(0));assert.ok(s.tracks[0].velocities.flat().includes(2));const r=await render(s);assert.ok(audible(r.outputSamplesL));assert.ok(r.outputSamplesL.every(Number.isFinite));
+  for(const id of ['groove-pop','groove-night','groove-pixel']){let s=preset(id);assert.equal(s.barCount,16);assert.equal(s.version,12);assert.equal(new Set(s.sections.map(p=>p.name)).size,4);assert.ok(s.tracks[0].velocities.flat().includes(0));assert.ok(s.tracks[0].velocities.flat().includes(2));const r=await render(s);assert.ok(audible(r.outputSamplesL));assert.ok(r.outputSamplesL.every(Number.isFinite));
     s=resize(s,32,'repeat');s.title='🌱音芽'.repeat(10);s.sections.forEach(p=>p.name='段落🌱'.repeat(6));assert.ok(Buffer.byteLength(JSON.stringify(s,null,2))<MAX_BACKUP_BYTES);assert.ok(encode(s).length<20000);assert.deepEqual(parseBackup(JSON.stringify(s,null,2)),s);assert.deepEqual(decode(encode(s)),s);
     const canceled=new AudioRenderer();for await(const _ of canceled.generate(s)){canceled.canceled=true;}assert.equal(canceled.outputSamplesL,null);
   }

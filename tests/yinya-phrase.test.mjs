@@ -34,19 +34,19 @@ test('moving whole sparse motifs into another bar retains relative timing, note 
 test('time collisions reject the complete edit even at a different pitch and never shorten or overwrite an existing note',()=>{
   const s=source(),before=structuredClone(s);for(const action of [{type:'move',steps:5,semitones:3},{type:'resize',delta:5},{type:'insert',step:1,pitch:0,duration:2,velocity:1}])assert.throws(()=>editPhrase(s,0,4,[0],action),/重叠|时长/);assert.deepEqual(s,before);assert.equal(phraseNotes(s,0,4)[0].duration,4);
 });
-test('section and bar boundaries reject negative starts, past-end placement and cross-bar durations atomically',()=>{
-  const s=source(),before=structuredClone(s);for(const [steps,action] of [[[0],{type:'move',steps:-1,semitones:0}],[[56],{type:'move',steps:8,semitones:0}],[[28],{type:'move',steps:1,semitones:0}],[[28],{type:'resize',delta:1}]])assert.throws(()=>editPhrase(s,0,4,steps,action));assert.deepEqual(s,before);
+test('section boundaries reject negative starts and past-end placement atomically',()=>{
+  const s=source(),before=structuredClone(s);for(const [steps,action] of [[[0],{type:'move',steps:-1,semitones:0}],[[56],{type:'move',steps:8,semitones:0}],[[56],{type:'move',steps:5,semitones:0}],[[56],{type:'resize',delta:5}]])assert.throws(()=>editPhrase(s,0,4,steps,action));assert.deepEqual(s,before);
 });
 test('chromatic moves use stable semitone IDs once and keep global transposition and scale unchanged',()=>{
   for(const shift of [-12,0,12])for(const scale of ['pentatonic','major','minor']){const s=source();s.transpose=shift;s.scale=scale;const next=editPhrase(s,0,4,[0],{type:'move',steps:0,semitones:1}).state;assert.equal(PITCH_VALUES[phraseNotes(next,0,4)[0].pitch],PITCH_VALUES[4]+1);assert.equal(next.transpose,shift);assert.equal(next.scale,scale);}
   let s=setPitchedNote(blank(),0,0,0,24,4).state;assert.throws(()=>editPhrase(s,0,0,[0],{type:'move',steps:0,semitones:1}));s=setPitchedNote(blank(),0,0,0,0,4).state;assert.throws(()=>editPhrase(s,0,0,[0],{type:'move',steps:0,semitones:-1}));
 });
-test('length edits support every integer duration from one to eight without moving note starts or changing velocity',()=>{
-  for(let length=1;length<=8;length++){const s=setPitchedNote(blank(),0,0,0,4,4,2).state,next=editPhrase(s,0,0,[0],{type:'resize',delta:length-4}).state;assert.deepEqual(phraseNotes(next,0,0),[{step:0,pitch:4,duration:length,velocity:2}]);}
-  const s=setPitchedNote(blank(),0,0,0,4,4).state;for(const delta of [-4,5,8,.5])assert.throws(()=>editPhrase(s,0,0,[0],{type:'resize',delta}));
+test('length edits support every integer duration from one to thirty two without moving note starts or changing velocity',()=>{
+  for(let length=1;length<=32;length++){const s=setPitchedNote(blank(),0,0,0,4,4,2).state,next=editPhrase(s,0,0,[0],{type:'resize',delta:length-4}).state;assert.deepEqual(phraseNotes(next,0,0),[{step:0,pitch:4,duration:length,velocity:2}]);}
+  const s=setPitchedNote(blank(),0,0,0,4,4).state;for(const delta of [-4,29,32,.5])assert.throws(()=>editPhrase(s,0,0,[0],{type:'resize',delta}));
 });
 test('one invalid note prevents an otherwise valid group resize or pitch move from partially applying',()=>{
-  let s=blank();s=setPitchedNote(s,0,0,0,2,2).state;s=setPitchedNote(s,0,1,12,24,4).state;const before=structuredClone(s);assert.throws(()=>editPhrase(s,0,0,[0,28],{type:'resize',delta:1}));assert.throws(()=>editPhrase(s,0,0,[0,28],{type:'move',steps:0,semitones:1}));assert.deepEqual(s,before);
+  let s=blank();s=setPitchedNote(s,0,0,0,2,2).state;s=setPitchedNote(s,0,3,12,24,4).state;const before=structuredClone(s);assert.throws(()=>editPhrase(s,0,0,[0,60],{type:'resize',delta:1}));assert.throws(()=>editPhrase(s,0,0,[0,60],{type:'move',steps:0,semitones:1}));assert.deepEqual(s,before);
 });
 test('batch velocity affects only chosen notes while rests, durations, pitches and every other track stay exact',()=>{
   const s=source();for(const level of [0,1,2]){const next=editPhrase(s,0,4,[0,8],{type:'velocity',level}).state;assert.deepEqual(next.tracks[0].bars,s.tracks[0].bars);assert.deepEqual(next.tracks[0].durations,s.tracks[0].durations);assert.deepEqual(phraseNotes(next,0,4).slice(0,2).map(n=>n.velocity),[level,level]);assert.deepEqual(phraseNotes(next,0,4).slice(2),phraseNotes(s,0,4).slice(2));protect(s,next,0,4);}
@@ -66,7 +66,7 @@ test('pasting between melody and bass preserves absolute relative pitch IDs, rhy
 });
 test('malformed clipboard data and conflicting or overflowing paste are rejected without touching either source',()=>{
   const s=source(),before=structuredClone(s),clip=copyPhrase(s,0,4,[0,8]),original=structuredClone(clip);assert.throws(()=>pastePhrase(s,0,4,0,clip));assert.throws(()=>pastePhrase(s,0,4,60,clip));
-  for(const bad of [null,{}, {...clip,version:2},{version:1,notes:[]},{version:1,notes:[{...clip.notes[0],offset:1}]},{version:1,notes:[{...clip.notes[0],offset:-1}]},{version:1,notes:[{...clip.notes[0],duration:9}]},{version:1,notes:[{...clip.notes[0],pitch:99}]},{version:1,notes:[clip.notes[0],clip.notes[0]]},{version:1,notes:Array(65).fill(clip.notes[0])}])assert.throws(()=>pastePhrase(blank(),0,0,0,bad));assert.deepEqual(s,before);assert.deepEqual(clip,original);
+  for(const bad of [null,{}, {...clip,version:2},{version:1,notes:[]},{version:1,notes:[{...clip.notes[0],offset:1}]},{version:1,notes:[{...clip.notes[0],offset:-1}]},{version:1,notes:[{...clip.notes[0],duration:33}]},{version:1,notes:[{...clip.notes[0],pitch:99}]},{version:1,notes:[clip.notes[0],clip.notes[0]]},{version:1,notes:Array(65).fill(clip.notes[0])}])assert.throws(()=>pastePhrase(blank(),0,0,0,bad));assert.deepEqual(s,before);assert.deepEqual(clip,original);
 });
 test('rectangle selection intersects sustained note bodies using actual semitones rather than stable ID ordering',()=>{
   const notes=[{step:0,pitch:8,duration:8},{step:12,pitch:0,duration:2},{step:20,pitch:24,duration:4}];assert.deepEqual(phraseRectangle(notes,{step:4,pitch:0},{step:7,pitch:2}),[0]);assert.deepEqual(phraseRectangle(notes,{step:7,pitch:2},{step:4,pitch:0}),[0]);assert.deepEqual(phraseRectangle(notes,{step:8,pitch:0},{step:11,pitch:24}),[]);assert.throws(()=>phraseRectangle(notes,null,{}));
@@ -74,8 +74,8 @@ test('rectangle selection intersects sustained note bodies using actual semitone
 test('stale, duplicate, empty and malformed selections and actions fail atomically with usable validation',()=>{
   const s=source(),before=structuredClone(s);for(const steps of [[],[0,0],[1],[undefined],['0'],Array(1),null])assert.throws(()=>editPhrase(s,0,4,steps,{type:'delete'}));for(const action of [null,[],{type:'x'},{type:'move',steps:1,semitones:NaN},{type:'move',steps:.5,semitones:0},{type:'move',steps:64,semitones:0},{type:'velocity',level:3}])assert.throws(()=>editPhrase(s,0,4,[0],action));assert.deepEqual(s,before);
 });
-test('published v0.12.0 orchestration fixtures retain exact schema and canonical audio conversion without any migration',async()=>{
-  const fixture=JSON.parse(await readFile(new URL('./fixtures/yinya-v0120-compat.json',import.meta.url)));assert.equal(fixture.cases.length,3);for(const {state,songSha256} of fixture.cases){assert.deepEqual(validate(state),state);assert.equal(createHash('sha256').update(JSON.stringify(canonical(songJSON(state)))).digest('hex'),songSha256);}
+test('published v0.12.0 orchestration fixtures migrate only schema while retaining exact canonical audio conversion',async()=>{
+  const fixture=JSON.parse(await readFile(new URL('./fixtures/yinya-v0120-compat.json',import.meta.url)));assert.equal(fixture.cases.length,3);for(const {state,songSha256} of fixture.cases){assert.deepEqual(validate(state),{...state,version:12});assert.equal(createHash('sha256').update(JSON.stringify(canonical(songJSON(state)))).digest('hex'),songSha256);}
 });
 test('long sequences of attempted edits stay monophonic, in bounds and within the chosen phrase while every rejection is atomic',()=>{
   let s=source(2),random=seeded();const original=structuredClone(s);for(let i=0;i<200;i++){const notes=phraseNotes(s,2,4),chosen=notes[Math.floor(random()*notes.length)],before=structuredClone(s),action=i%3===0?{type:'resize',delta:random()<.5?-1:1}:i%3===1?{type:'move',steps:random()<.5?-1:1,semitones:0}:{type:'move',steps:0,semitones:random()<.5?-1:1};try{s=editPhrase(s,2,4,[chosen.step],action).state;assert.deepEqual(validate(s),s);protect(original,s,2,4);}catch{assert.deepEqual(s,before);}}
@@ -83,8 +83,8 @@ test('long sequences of attempted edits stay monophonic, in bounds and within th
 test('inverse moves and resizes restore exact data and paste followed by deleting its selection restores every original rest',()=>{
   const s=source(),a=editPhrase(s,0,4,[0,8],{type:'move',steps:1,semitones:1}),b=editPhrase(a.state,0,4,a.selection,{type:'move',steps:-1,semitones:-1});assert.deepEqual(b.state,s);const r=editPhrase(s,0,4,[0],{type:'resize',delta:-1});assert.deepEqual(editPhrase(r.state,0,4,r.selection,{type:'resize',delta:1}).state,s);const clipboard=copyPhrase(s,0,4,[0]),p=pastePhrase(s,0,4,36,clipboard);assert.deepEqual(editPhrase(p.state,0,4,p.selection,{type:'delete'}).state,s);
 });
-test('edited maximum-length Unicode projects share and back up as unchanged schema eleven within the existing bounds',()=>{
-  let s=source();for(let start=0;start<32;start+=4){const notes=phraseNotes(s,0,start);if(notes.length)s=editPhrase(s,0,start,notes.map(n=>n.step),{type:'velocity',level:0}).state;}s.title='音芽🌱'.repeat(10);s.sections.forEach(p=>p.name='段落🌱'.repeat(6));assert.equal(s.version,11);assert.ok(Buffer.byteLength(JSON.stringify(s,null,2))<MAX_BACKUP_BYTES);assert.ok(encode(s).length<20000);assert.deepEqual(decode(encode(s)),s);assert.deepEqual(parseBackup(JSON.stringify(s,null,2)),s);
+test('edited maximum-length Unicode projects share and back up as current schema twelve within the existing bounds',()=>{
+  let s=source();for(let start=0;start<32;start+=4){const notes=phraseNotes(s,0,start);if(notes.length)s=editPhrase(s,0,start,notes.map(n=>n.step),{type:'velocity',level:0}).state;}s.title='音芽🌱'.repeat(10);s.sections.forEach(p=>p.name='段落🌱'.repeat(6));assert.equal(s.version,12);assert.ok(Buffer.byteLength(JSON.stringify(s,null,2))<MAX_BACKUP_BYTES);assert.ok(encode(s).length<20000);assert.deepEqual(decode(encode(s)),s);assert.deepEqual(parseBackup(JSON.stringify(s,null,2)),s);
 });
 test('atomic phrase edits synthesize the same stereo PCM as independently editing ordinary notes with the existing model',async()=>{
   const s=source(),edited=editPhrase(s,0,4,[0],{type:'move',steps:2,semitones:1}).state;let expected=removePitchedNote(s,0,4,0);expected=setPitchedNote(expected,0,4,2,pitchId(PITCH_VALUES[4]+1),4,0).state;assert.deepEqual(edited,expected);

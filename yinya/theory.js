@@ -39,7 +39,8 @@ export function chordName(state,id) {
 }
 export function pitchRows(state,track,bar,range='all',naming='solfege') {
   if(!['all','low','high'].includes(range)||![0,2].includes(track)||!Number.isInteger(bar)||bar<0||bar>=state.barCount)throw new Error('显示音域或小节无效');
-  const used=new Set(state.tracks[track].bars[bar].filter(n=>n>=0));
+  const layer=state.tracks[track],used=new Set(layer.bars[bar].filter(n=>n>=0));
+  for(let b=Math.floor(bar/4)*4;b<bar;b++)for(let step=0;step<16;step++)if(layer.bars[b][step]>=0&&b*16+step+layer.durations[b][step]>bar*16)used.add(layer.bars[b][step]);
   return PITCH_VALUES.map((offset,id)=>({offset,id})).filter(({offset,id})=>(range==='all'||(range==='low'?offset<=12:offset>=12))&&(inScale(state,id)||used.has(id))).sort((a,b)=>b.offset-a.offset).map(({id})=>({id,label:pitchName(state,track,id,naming),outside:!inScale(state,id)}));
 }
 export function chordRows(state,bar,all=false) {

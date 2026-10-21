@@ -54,6 +54,7 @@ export function generateMelody(value,start,settings={}) {
   const state=validate(value),options=melodyOptions(settings);
   if(!Number.isInteger(start)||start<0||start%GROUP_SIZE||start+GROUP_SIZE>state.barCount)throw new Error('请选择有效的四小节段');
   const track=state.tracks[0],target=melodyTarget(start,options.mode),original=onsets(track,start,start+GROUP_SIZE),prefix=original.filter(n=>n.bar<start+2);
+  if(options.mode==='answer'&&prefix.some(n=>n.bar*16+n.step+track.durations[n.bar][n.step]>target.start*16))throw new Error('前两小节的长音延入后两小节，请先按小节断开延音，或选择生成四小节；作品未改变。');
   if(options.mode==='answer'&&!prefix.length)throw new Error('前两小节没有旋律，请先写一句，或选择「生成四小节」。');
   if(options.mode==='repitch'&&!original.length)throw new Error('当前四小节没有旋律，请先选择「生成四小节」。');
   const scale=scaleInfo(state.scale),allowed=PITCH_VALUES.filter(p=>scale.intervals.includes(p%12)&&(options.range==='all'||(options.range==='low'?p<=12:p>=12))).sort((a,b)=>a-b);

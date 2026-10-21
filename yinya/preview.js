@@ -40,6 +40,24 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
       const note = pitchedNoteAt(state, trackIndex, notePosition.bar, notePosition.step);
       if (!note || PITCH_VALUES[note.pitch] + (trackIndex===0?48:24) + state.transpose !== pitches[0]) throw new Error('试听音符不存在');
       ({ start, duration } = note); release = trackIndex === 0 ? releaseSeconds(id, state.tempo) : bassReleaseSeconds(id,state.tempo);
+      if(note.bar!==undefined||start+duration>16){
+        const owner=note.bar??bar,source=json.channels[0].patterns,fragments=[];
+        for(let b=owner;b<=Math.floor((owner*16+start+duration-1)/16);b++)for(const n of source[b].notes){
+          const at=b*16+n.points[0].tick;
+          if(at>=owner*16+start&&at<owner*16+start+duration)fragments.push({...n,points:n.points.map(p=>({...p,tick:b*16+p.tick-owner*16-start}))});
+        }
+        const count=Math.ceil(duration/16)+1;
+        json.channels[0].patterns=Array.from({length:count},(_,i)=>({...(instruments?{instruments}:{}),notes:fragments.flatMap(n=>{
+          const left=Math.max(i*16,n.points[0].tick),right=Math.min((i+1)*16,n.points.at(-1).tick);
+          if(left>=right)return [];
+          return [{...n,...(left>0?{continuesLastPattern:true}:{continuesLastPattern:false}),points:[{...n.points[0],tick:left-i*16},{...n.points.at(-1),tick:right-i*16}]}];
+        })}));
+        // Rebased fragments that meet within a bar are one note, so the synth does not reattack.
+        for(const pattern of json.channels[0].patterns)for(let i=pattern.notes.length-1;i>0;i--){const a=pattern.notes[i-1],b=pattern.notes[i];if(a.points.at(-1).tick===b.points[0].tick){a.points[a.points.length-1]=b.points.at(-1);pattern.notes.splice(i,1);}}
+        json.channels[0].sequence=Array.from({length:count},(_,i)=>i+1);json.loopBars=count;
+        seconds=duration*60/state.tempo/4+release;
+        notes=[];
+      }
     } else if (!positioned) {
       start = 0; duration = 4; release = chordReleaseSeconds(id, state.tempo);
       notes = chordNotes(row, 0, id, style, state.transpose);
@@ -50,8 +68,8 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
       start = step * 4; duration = 4; release = chordReleaseSeconds(id, state.tempo);
     }
     notes ??= json.channels[0].patterns[notePosition.bar].notes.filter(n => n.points[0].tick >= start && n.points[0].tick < start + duration);
-    const isolated = notes.map(n => ({ ...n, points: n.points.map(point => ({ ...point, tick: point.tick - start })) }));
-    json.channels[0].patterns = [{ ...(instruments?{instruments}:{}),notes: isolated }]; json.channels[0].sequence = [1]; json.loopBars = 1;
+    if(notes.length){const isolated = notes.map(n => ({ ...n, points: n.points.map(point => ({ ...point, tick: point.tick - start })) }));
+    json.channels[0].patterns = [{ ...(instruments?{instruments}:{}),notes: isolated }]; json.channels[0].sequence = [1]; json.loopBars = 1;}
     seconds = duration * 60 / state.tempo / 4 + release;
   }
   const song = audioSong(json);

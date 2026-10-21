@@ -27,7 +27,7 @@ test('frozen v0.8.0 songs migrate without changing any instrument, note, velocit
   const fixture=JSON.parse(await readFile(new URL('./fixtures/yinya-v080-compat.json',import.meta.url)));
   assert.equal(fixture.cases.length,3);
   for(const {state,songSha256} of fixture.cases){const before=structuredClone(state),next=validate(state);
-    assert.equal(next.version,11);assert.equal(next.scale,'pentatonic');assert.equal(next.transpose,0);
+    assert.equal(next.version,12);assert.equal(next.scale,'pentatonic');assert.equal(next.transpose,0);
     assert.equal(createHash('sha256').update(JSON.stringify(canonical(songJSON(next)))).digest('hex'),songSha256);assert.deepEqual(state,before);
   }
 });

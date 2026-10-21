@@ -23,7 +23,7 @@ function validateNotes(notes) {
   let end=0;
   for(const n of [...notes].sort((a,b)=>a.step-b.step)){
     if(!Number.isInteger(n.step)||n.step<0||n.step>=64||!Number.isInteger(n.pitch)||PITCH_VALUES[n.pitch]===undefined)throw new Error('音符超出当前四小节或两个八度；作品未改变');
-    if(!Number.isInteger(n.duration)||n.duration<1||n.duration>8||n.step%16+n.duration>16)throw new Error('时长需为 1–8 格，且不能跨小节；作品未改变');
+    if(!Number.isInteger(n.duration)||n.duration<1||n.duration>32||n.step+n.duration>64)throw new Error('时长需为 1–32 格，且不能超出当前四小节段；作品未改变');
     if(![0,1,2].includes(n.velocity))throw new Error('音符力度无效');
     if(n.step<end)throw new Error('音符发生重叠，整次修改已取消；已有内容保留');
     end=n.step+n.duration;
@@ -49,8 +49,17 @@ export function editPhrase(value,track,start,steps,action) {
       if(!Number.isInteger(action.steps)||Math.abs(action.steps)>63||!Number.isInteger(action.semitones)||Math.abs(action.semitones)>24)throw new Error('移动格数或半音无效');
       changed=chosen.map(n=>({...n,step:n.step+action.steps,pitch:pitchId(PITCH_VALUES[n.pitch]+action.semitones)}));break;
     case 'resize':
-      if(!Number.isInteger(action.delta)||Math.abs(action.delta)>7)throw new Error('长度调整无效');
+      if(!Number.isInteger(action.delta)||Math.abs(action.delta)>31)throw new Error('长度调整无效');
       changed=chosen.map(n=>({...n,duration:n.duration+action.delta}));break;
+    case 'length':
+      if(!Number.isInteger(action.duration)||action.duration<1||action.duration>32)throw new Error('时长需为 1–32 格');
+      changed=chosen.map(n=>({...n,duration:action.duration}));break;
+    case 'join': {
+      if(chosen.length<2||chosen.some((n,i)=>n.pitch!==chosen[0].pitch||n.velocity!==chosen[0].velocity||(i>0&&chosen[i-1].step+chosen[i-1].duration!==n.step)))throw new Error('请选择至少两个首尾相接、音高与力度相同的音符；作品未改变');
+      changed=[{...chosen[0],duration:chosen.at(-1).step+chosen.at(-1).duration-chosen[0].step}];break;
+    }
+    case 'split':
+      changed=chosen.flatMap(n=>{const parts=[];for(let step=n.step;step<n.step+n.duration;){const duration=Math.min(16-step%16,n.step+n.duration-step);parts.push({...n,step,duration});step+=duration;}return parts;});break;
     case 'velocity':
       if(![0,1,2].includes(action.level))throw new Error('音符力度无效');
       changed=chosen.map(n=>({...n,velocity:action.level}));break;

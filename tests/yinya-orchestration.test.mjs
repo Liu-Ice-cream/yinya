@@ -24,7 +24,7 @@ function context(){const sources=[],buffers=[];return {sources,buffers,sampleRat
 
 test('published v0.11.0 melody projects migrate by adding inherited voices and unity section levels with byte-identical canonical audio',async()=>{
   const fixture=JSON.parse(await readFile(new URL('./fixtures/yinya-v0110-compat.json',import.meta.url)));assert.equal(fixture.cases.length,3);
-  for(const {state,songSha256} of fixture.cases){const before=structuredClone(state),next=validate(state);assert.equal(next.version,11);assert.deepEqual(next.tracks,state.tracks);assert.ok(next.sections.every(p=>p.voices.every(id=>id==='inherit')&&p.volumes.every(n=>n===100)));assert.equal(createHash('sha256').update(JSON.stringify(canonical(songJSON(next)))).digest('hex'),songSha256);assert.deepEqual(state,before);}
+  for(const {state,songSha256} of fixture.cases){const before=structuredClone(state),next=validate(state);assert.equal(next.version,12);assert.deepEqual(next.tracks,state.tracks);assert.ok(next.sections.every(p=>p.voices.every(id=>id==='inherit')&&p.volumes.every(n=>n===100)));assert.equal(createHash('sha256').update(JSON.stringify(canonical(songJSON(next)))).digest('hex'),songSha256);assert.deepEqual(state,before);}
 });
 test('schema eleven rejects missing, sparse, cross-track and unknown voices and malformed relative levels atomically',()=>{
   const s=preset('orchestra-day'),before=structuredClone(s);
