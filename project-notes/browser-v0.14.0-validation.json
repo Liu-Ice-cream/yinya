@@ -14,6 +14,7 @@
     "Actual mouse resize changes 24-step cross-bar note to 16 steps",
     "Actual mouse drag moves complete 16-step held note by four steps",
     "Undoing both mouse edits restores exact source snapshot",
+    "Single-bar copy refuses a destination crossed by a hold; exact share snapshot retained",
     "32-bar original test work saves as new library work 17 and reloads intact",
     "Four-voice audition and full playback use continuation notes",
     "32-bar MP3 and WAV reach ready download state",

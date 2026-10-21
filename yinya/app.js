@@ -438,7 +438,7 @@ $('confirm-copy').addEventListener('click', () => {
   if (rangeHasNotes(state, destination, destination + GROUP_SIZE)) confirmChange(`第 ${destination + 1}–${destination + GROUP_SIZE} 小节已有内容，将覆盖全部四个声部。之后可以撤销恢复。`, apply, '覆盖并复制');
   else apply();
 });
-$('copy-bar').addEventListener('click', () => { const dest = (follower.selectedBar + 1) % state.barCount, next = copyBar(state, selectedTrack, follower.selectedBar, dest); selectedNote = null; follower.select(dest, synth.playing); commit(next, `已复制本小节内的内容到第 ${dest + 1} 小节；跨小节长音按边界截取，目标处相交的完整长音已替换；可撤销。`); });
+$('copy-bar').addEventListener('click', () => { try {const dest = (follower.selectedBar + 1) % state.barCount, next = copyBar(state, selectedTrack, follower.selectedBar, dest); selectedNote = null; follower.select(dest, synth.playing); commit(next, `已复制本小节内的内容到第 ${dest + 1} 小节；跨小节长音按边界截取；可撤销。`);}catch(error){status(error.message);} });
 $('clear-bar').addEventListener('click', () => { const next=clearBar(state,selectedTrack,follower.selectedBar);selectedNote=null;commit(next,'这一小节及与其相交的完整长音已清空；撤销可以恢复。'); });
 
 function renderLibrary() {

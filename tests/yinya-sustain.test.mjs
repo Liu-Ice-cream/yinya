@@ -47,9 +47,9 @@ test('continuation selection updates velocity and deletes the complete original 
 test('clear-bar removes entire intersecting long notes and leaves unrelated notes in adjacent bars intact',()=>{
   let s=hold();s=setPitchedNote(s,0,3,0,7,8).state;const next=clearBar(s,0,1);assert.equal(phraseNotes(next,0,0).length,1);assert.equal(phraseNotes(next,0,0)[0].step,48);assert.equal(phraseNotes(s,0,0).length,2);assert.deepEqual(validate(next),next);
 });
-test('bar copy snapshots incoming audible fragments, clips at destination and removes touching destination holds',()=>{
+test('bar copy snapshots incoming fragments and refuses to alter holds outside its destination',()=>{
   let s=hold();const next=copyBar(s,0,1,3);assert.deepEqual(phraseNotes(next,0,0).map(n=>[n.step,n.duration]),[[12,32],[48,16]]);assert.equal(next.tracks[0].velocities[3][0],2);
-  const self=copyBar(s,0,1,1);assert.deepEqual(phraseNotes(self,0,0).map(n=>[n.step,n.duration]),[[16,16]]);assert.deepEqual(validate(self),self);assert.deepEqual(phraseNotes(s,0,0).map(n=>[n.step,n.duration]),[[12,32]]);
+  const before=structuredClone(s);for(const [source,destination] of [[0,1],[1,1],[3,0],[3,2]])assert.throws(()=>copyBar(s,0,source,destination),/先.*断开/);assert.deepEqual(s,before);assert.deepEqual(phraseNotes(s,0,0).map(n=>[n.step,n.duration]),[[12,32]]);
 });
 test('join only connects selected adjacent equal-pitch equal-velocity notes and split restores separate bar attacks',()=>{
   let s=hold(0,0,16);s=editPhrase(s,0,0,[],{type:'insert',step:16,pitch:4,duration:16,velocity:2}).state;

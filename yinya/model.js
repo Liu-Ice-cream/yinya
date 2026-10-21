@@ -238,7 +238,12 @@ export function copyBar(value, trackIndex, source, destination) {
   const state = validate(value);
   if (!Number.isInteger(trackIndex) || trackIndex < 0 || trackIndex > 3 || ![source, destination].every(i => Number.isInteger(i) && i >= 0 && i < state.barCount)) throw new Error('复制小节位置无效');
   if (LONG_NOTE_TRACKS.includes(trackIndex)) {
-    // Snapshot the audible part of this bar; a bar copy never writes beyond its destination.
+    // A bar copy may not remove a whole note that also belongs to another bar.
+    for(let step=0;step<16;step++){
+      const n=pitchedNoteAt(state,trackIndex,destination,step);
+      if(n&&(n.bar!==undefined||n.start+n.duration>16))throw new Error('目标小节有跨小节长音，请先在乐句编辑台按小节断开，再复制；作品未改变');
+    }
+    // Snapshot only the audible part of the source bar, including incoming holds.
     const notes=[];
     for(let step=0;step<16;step++) {const n=pitchedNoteAt(state,trackIndex,source,step);if(n&&(step===0||(n.bar===undefined&&n.start===step))){const owner=n.bar??source,begin=owner*16+n.start;notes.push({step,pitch:n.pitch,duration:Math.min(16-step,begin+n.duration-source*16-step),velocity:state.tracks[trackIndex].velocities[owner][n.start]});}}
     const result=clearBar(state,trackIndex,destination),track=result.tracks[trackIndex];
