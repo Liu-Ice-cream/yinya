@@ -1782,6 +1782,8 @@ export class Channel {
 }
 
 export class Song {
+	// Optional runtime-only channel gain. Omitted by every ordinary BeepBox song.
+	public channelGainEnvelope: ((channel: number, barPosition: number, instrument: number) => number) | null = null;
 	private static readonly _format: string = "BeepBox";
 	private static readonly _oldestVersion: number = 2;
 	private static readonly _latestVersion: number = 9;
@@ -4687,6 +4689,8 @@ export class Synth {
 	private limit: number = 0.0;
 	
 	private tempMonoInstrumentSampleBuffer: Float32Array | null = null;
+	private channelMixL: Float32Array | null = null;
+	private channelMixR: Float32Array | null = null;
 	
 	private audioCtx: any | null = null;
 	private scriptNode: any | null = null;
@@ -4962,6 +4966,10 @@ export class Synth {
 			this.tempMonoInstrumentSampleBuffer = new Float32Array(outputBufferLength);
 		}
 		
+		if (song.channelGainEnvelope && (this.channelMixL == null || this.channelMixL.length < outputBufferLength)) {
+			this.channelMixL = new Float32Array(outputBufferLength);
+			this.channelMixR = new Float32Array(outputBufferLength);
+		}
 		// Post processing parameters:
 		const volume: number = +this.volume;
 		const limitDecay: number = 1.0 - Math.pow(0.5, 4.0 / this.samplesPerSecond);
@@ -4981,6 +4989,8 @@ export class Synth {
 			for (let channelIndex: number = 0; channelIndex < song.getChannelCount(); channelIndex++) {
 				const channel: Channel = song.channels[channelIndex];
 				const channelState: ChannelState = this.channels[channelIndex];
+				const channelOutputL = song.channelGainEnvelope ? this.channelMixL! : outputDataL;
+				const channelOutputR = song.channelGainEnvelope ? this.channelMixR! : outputDataR;
 				
 				if (this.isAtStartOfTick) {
 					this.determineCurrentActiveTones(song, channelIndex, samplesPerTick, playSong && !this.countInMetronome);
@@ -5030,7 +5040,21 @@ export class Synth {
 					}
 					
 					if (instrumentState.awake) {
-						Synth.effectsSynth(this, outputDataL, outputDataR, bufferIndex, runLength, instrumentState);
+						if (song.channelGainEnvelope) { channelOutputL.fill(0, bufferIndex, runEnd); channelOutputR.fill(0, bufferIndex, runEnd); }
+						Synth.effectsSynth(this, channelOutputL, channelOutputR, bufferIndex, runLength, instrumentState);
+						if (song.channelGainEnvelope) {
+							const position = (((this.tick + 1 - this.tickSampleCountdown / samplesPerTick) / Config.ticksPerPart + this.part) / Config.partsPerBeat + this.beat) / song.beatsPerBar + this.bar;
+							const samplesPerBar = samplesPerTick * Config.ticksPerPart * Config.partsPerBeat * song.beatsPerBar;
+							const lastPosition = Math.min(this.bar + 1 - 1e-10, position + (runLength - 1) / samplesPerBar);
+							const firstGain = song.channelGainEnvelope(channelIndex, position, instrumentIndex);
+							const lastGain = song.channelGainEnvelope(channelIndex, lastPosition, instrumentIndex);
+							const delta = (lastGain - firstGain) / Math.max(1, runLength - 1);
+							for (let i = bufferIndex; i < runEnd; i++) {
+								const gain = firstGain + delta * (i - bufferIndex);
+								outputDataL[i] += channelOutputL[i] * gain;
+								outputDataR[i] += channelOutputR[i] * gain;
+							}
+						}
 					}
 				}
 			}

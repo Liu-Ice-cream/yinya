@@ -9,7 +9,7 @@ test('v1 and v2 migration keeps adjacent repeated notes separate with their exac
     delete old.tracks[0].durations;
     old.tracks[0].bars[0][0] = 3; old.tracks[0].bars[0][1] = 3;
     const before = structuredClone(old), migrated = validate(old);
-    assert.equal(migrated.version, 12);
+    assert.equal(migrated.version, 13);
     assert.deepEqual(migrated.tracks[0].durations[0], Array(16).fill(1));
     assert.deepEqual(migrated.tracks[0].bars, old.tracks[0].bars);
     const notes = songJSON(migrated).channels[0].patterns[0].notes;

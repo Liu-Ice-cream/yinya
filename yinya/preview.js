@@ -27,6 +27,11 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   if (!Number.isInteger(bar) || bar < 0 || bar >= state.barCount) throw new Error('试听小节位置无效');
   if (!trackAudibleAt(state, trackIndex, bar)) return null;
   const json = songJSON(state); json.channels = [json.channels[trackIndex]];
+  const part=state.sections[Math.floor(bar/4)],dynamic=part.volumes[trackIndex]!==part.endVolumes[trackIndex];
+  if(json.yinyaDynamics)json.yinyaDynamics=[json.yinyaDynamics[trackIndex]];
+  const offsetStep=notePosition?.offsetStep??0;
+  if(!Number.isInteger(offsetStep)||offsetStep<0||offsetStep>15)throw new Error('试听时间位置无效');
+  json.yinyaDynamicsOffset=bar+offsetStep/16;
   const id=trackIndex<3?sectionVoice(state,trackIndex,bar):null, gain=sectionGain(state,trackIndex,bar);
   const instruments=json.channels[0].patterns[bar].instruments;
   let seconds = PREVIEW_SECONDS;
@@ -39,7 +44,7 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
     if (LONG_NOTE_TRACKS.includes(trackIndex)) {
       const note = pitchedNoteAt(state, trackIndex, notePosition.bar, notePosition.step);
       if (!note || PITCH_VALUES[note.pitch] + (trackIndex===0?48:24) + state.transpose !== pitches[0]) throw new Error('试听音符不存在');
-      ({ start, duration } = note); release = trackIndex === 0 ? releaseSeconds(id, state.tempo) : bassReleaseSeconds(id,state.tempo);
+      ({ start, duration } = note);json.yinyaDynamicsOffset=(note.bar??bar)+start/16; release = trackIndex === 0 ? releaseSeconds(id, state.tempo) : bassReleaseSeconds(id,state.tempo);
       if(note.bar!==undefined||start+duration>16){
         const owner=note.bar??bar,source=json.channels[0].patterns,fragments=[];
         for(let b=owner;b<=Math.floor((owner*16+start+duration-1)/16);b++)for(const n of source[b].notes){
@@ -61,11 +66,11 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
     } else if (!positioned) {
       start = 0; duration = 4; release = chordReleaseSeconds(id, state.tempo);
       notes = chordNotes(row, 0, id, style, state.transpose);
-      if(gain!==1)notes.forEach(n=>{n.yinyaSectionGain=gain;});
+      if(!dynamic&&gain!==1)notes.forEach(n=>{n.yinyaSectionGain=gain;});
     } else {
       const { bar, step } = notePosition;
       if (!Number.isInteger(bar) || !Number.isInteger(step) || bar < 0 || bar >= state.barCount || step < 0 || step > 3 || layer.bars[bar][step] !== row) throw new Error('试听和弦不存在');
-      start = step * 4; duration = 4; release = chordReleaseSeconds(id, state.tempo);
+      start = step * 4;json.yinyaDynamicsOffset=bar+start/16; duration = 4; release = chordReleaseSeconds(id, state.tempo);
     }
     notes ??= json.channels[0].patterns[notePosition.bar].notes.filter(n => n.points[0].tick >= start && n.points[0].tick < start + duration);
     if(notes.length){const isolated = notes.map(n => ({ ...n, points: n.points.map(point => ({ ...point, tick: point.tick - start })) }));
@@ -82,7 +87,7 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   const count = Math.ceil(seconds * sampleRate);
   const left = new Float32Array(count), right = new Float32Array(count);
   synth.synthesize(left, right, count, sequencePreview);
-  if(!sequencePreview&&gain!==1)for(let i=0;i<count;i++){left[i]*=gain;right[i]*=gain;}
+  if(!sequencePreview&&!dynamic&&gain!==1)for(let i=0;i<count;i++){left[i]*=gain;right[i]*=gain;}
   const shapedEnding = trackIndex === 0 ? !voiceInfo(id).legacy : trackIndex === 2 ? !bassVoiceInfo(id).legacy : trackIndex === 1 && (!chordVoiceInfo(id).legacy || style !== 'block');
   if (sequencePreview && shapedEnding) fadeEnd(left, right, Math.ceil(sampleRate * .02));
   return { left, right, sampleRate };

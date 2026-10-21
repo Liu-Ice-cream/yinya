@@ -80,7 +80,7 @@ test('invalid settings and ranges are rejected without mutating the original wor
   for(const start of [-4,1,14,16,0.5])assert.throws(()=>generateAccompaniment(s,start));assert.deepEqual(s,before);
 });
 test('candidate generation is deterministic, independent and produces ordinary current-schema data',()=>{
-  const s=preset('tone-day'),before=structuredClone(s),a=generateAccompaniment(s,4,ensemble()),b=generateAccompaniment(s,4,ensemble());assert.deepEqual(a,b);assert.equal(a.version,12);
+  const s=preset('tone-day'),before=structuredClone(s),a=generateAccompaniment(s,4,ensemble()),b=generateAccompaniment(s,4,ensemble());assert.deepEqual(a,b);assert.equal(a.version,13);
   a.tracks[2].bars[4][0]=0;assert.deepEqual(s,before);assert.deepEqual(b,generateAccompaniment(s,4,ensemble()));assert.ok(!('accompaniment' in b));
 });
 test('frozen v0.9.0 major and minor projects retain byte-identical canonical song conversion',async()=>{

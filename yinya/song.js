@@ -1,3 +1,4 @@
+import { dynamicsAt, validateDynamics } from './dynamics.js';
 import { Song } from '../synth/synth.ts';
 
 // BeepBox's JSON reader quantizes point volume to four sizes. Apply our bounded
@@ -5,6 +6,19 @@ import { Song } from '../synth/synth.ts';
 // This Song is used directly, never round-tripped through BeepBox serialization.
 export function audioSong(json) {
   const song = new Song(); song.fromJsonObject(json);
+  if(json.yinyaDynamics!==undefined){
+    const curves=validateDynamics(json.yinyaDynamics,json.channels.length),offset=json.yinyaDynamicsOffset??0;
+    if(!Number.isFinite(offset)||offset<0||offset>32)throw new Error('音量曲线位置无效');
+    curves.forEach((curve,index)=>{if(curve&&curve.length!==json.channels[index].instruments.length)throw new Error('动态配器与音量曲线不匹配');});
+    // Each arranged section owns an instrument instance, so released sounds
+    // retain their section's end gain while the next section starts its curve.
+    song.channelGainEnvelope=(channel,position,instrument)=>{
+      const curve=curves[channel];if(!curve)return 1;
+      const section=instrument??Math.min(curve.length-1,Math.floor((position+offset)/4)),pair=curve[section];
+      if(pair[0]===pair[1])return 1;
+      return dynamicsAt([pair],Math.max(0,Math.min(4,position+offset-section*4)));
+    };
+  }
   song.channels.forEach((channel, c) => channel.patterns.forEach((pattern, p) => {
     pattern.notes.forEach((note, n) => {
       const gain = json.channels[c].patterns[p].notes[n]?.yinyaGain ?? 1;

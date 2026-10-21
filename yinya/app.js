@@ -11,10 +11,12 @@ import { PreviewPlayer } from './preview.js';
 import { PlaybackFollower, playbackPosition, playbackRange, configurePlayback } from './playback.js';
 import { sectionVoice, sectionGain, setSectionVoice, setSectionVolume, resetSectionOrchestration } from './model.js';
 import { PhraseEditor } from './phrase-editor.js';
+import { DynamicEditor } from './dynamic-editor.js';
+import { dynamicLabel } from './dynamics.js';
 
 const $ = id => document.getElementById(id);
-const KEYS = { draft: 'yinya.v12.draft', library: 'yinya.v12.library', preferences: 'yinya.v1.preferences' };
-const LEGACY_KEYS = [{draft:"yinya.v11.draft",library:"yinya.v11.library"}, {draft:"yinya.v10.draft",library:"yinya.v10.library"}, {draft:'yinya.v9.draft',library:'yinya.v9.library'}, { draft:'yinya.v8.draft',library:'yinya.v8.library' }, { draft: 'yinya.v7.draft', library: 'yinya.v7.library' }, { draft: 'yinya.v6.draft', library: 'yinya.v6.library' }, { draft: 'yinya.v5.draft', library: 'yinya.v5.library' }, { draft: 'yinya.v4.draft', library: 'yinya.v4.library' }, { draft: 'yinya.v3.draft', library: 'yinya.v3.library' }, { draft: 'yinya.v2.draft', library: 'yinya.v2.library' }, { draft: 'yinya.v1.draft', library: 'yinya.v1.library' }];
+const KEYS = { draft: 'yinya.v13.draft', library: 'yinya.v13.library', preferences: 'yinya.v1.preferences' };
+const LEGACY_KEYS = [{draft:"yinya.v12.draft",library:"yinya.v12.library"}, {draft:"yinya.v11.draft",library:"yinya.v11.library"}, {draft:"yinya.v10.draft",library:"yinya.v10.library"}, {draft:'yinya.v9.draft',library:'yinya.v9.library'}, { draft:'yinya.v8.draft',library:'yinya.v8.library' }, { draft: 'yinya.v7.draft', library: 'yinya.v7.library' }, { draft: 'yinya.v6.draft', library: 'yinya.v6.library' }, { draft: 'yinya.v5.draft', library: 'yinya.v5.library' }, { draft: 'yinya.v4.draft', library: 'yinya.v4.library' }, { draft: 'yinya.v3.draft', library: 'yinya.v3.library' }, { draft: 'yinya.v2.draft', library: 'yinya.v2.library' }, { draft: 'yinya.v1.draft', library: 'yinya.v1.library' }];
 const clone = value => JSON.parse(JSON.stringify(value));
 const history = [], future = [];
 let state = preset('sprout'), activeId = null, selectedTrack = 0, library = [], storageWarning = '', exporting = false;
@@ -139,7 +141,7 @@ function renderControls() {
   const t = TRACKS[selectedTrack], layer = state.tracks[selectedTrack];
   $('editor-view-label').hidden = !LONG_NOTE_TRACKS.includes(selectedTrack); $('editor-view').value=editorView; $('editor-view').disabled=exporting;
   renderTheoryControls();
-  $('open-workshop').disabled = $('open-melody').disabled = exporting;
+  $('open-dynamics').disabled = $('open-workshop').disabled = $('open-melody').disabled = exporting;
   $('title').value = state.title; $('tempo').value = state.tempo;
   $('bar-count').value = state.barCount;
   $('length-fill').disabled = state.barCount === 32;
@@ -258,7 +260,7 @@ function editCell(row, col) {
   if (!added) { status(`已移除${label}。`); return; }
   if (!clickPreview || exporting) { status(`已添加${label}。${exporting ? '导出完成后可以试听。' : '点击试听已关闭。'}`); return; }
   if (!trackAudibleAt(state, selectedTrack, follower.selectedBar)) { status(`已添加${label}。${!t.enabled ? '整曲这一层已关闭' : t.volume === 0 ? '这一层音量为零' : '本段未加入这一层'}，暂不试听。`); return; }
-  preview.play(state, selectedTrack, choice.id, selectedTrack === 1 && (choice.id >= 4 || !chordVoiceInfo(sectionVoice(state,1,follower.selectedBar)).legacy || sectionChordStyle(state,follower.selectedBar) !== 'block') ? { bar: follower.selectedBar, step: col } : { bar: follower.selectedBar }).then(started => {
+  preview.play(state, selectedTrack, choice.id, selectedTrack === 1 && (choice.id >= 4 || !chordVoiceInfo(sectionVoice(state,1,follower.selectedBar)).legacy || sectionChordStyle(state,follower.selectedBar) !== 'block') ? { bar: follower.selectedBar, step: col } : { bar: follower.selectedBar, offsetStep: selectedTrack===1?col*4:col }).then(started => {
     if (started) status(`试听${label}。再点一次移除。`);
   }).catch(() => status(`已添加${label}，浏览器未能启动声音。可按「播放循环」重试。`));
 }
@@ -540,17 +542,19 @@ phraseEditor = new PhraseEditor($('phrase-editor'),{
   auditionPhrase:()=>$('preview-section').click(),
   auditionNote:note=>{if(note&&clickPreview&&!exporting&&!synth.playing){const start=Math.floor(follower.selectedBar/GROUP_SIZE)*GROUP_SIZE;preview.play(state,selectedTrack,0,{bar:start+Math.floor(note.step/16),step:note.step%16,pitch:note.pitch}).catch(()=>status('音符已保留，浏览器未能启动声音。'));}},
 });
+const dynamicEditor=new DynamicEditor($('dynamic-dialog'),{get:()=>state,beforeEdit:stop,preview,commit:(next,message)=>{selectedNote=null;commit(next,message);}});
+$('open-dynamics').addEventListener('click',()=>{if(!exporting)dynamicEditor.open(Math.floor(follower.selectedBar/GROUP_SIZE));});
 initOrchestrationControls(); renderPresets(); syncAudio(); render(); if (consumedShare || migratedDraft) draftSave();
 status(clickPreview ? `点亮一个格子试听，或按「播放循环」听完整 ${state.barCount} 小节。` : `点击试听已关闭；可以安静编辑，或按「播放循环」听完整 ${state.barCount} 小节。`);
 if (storageWarning) status(storageWarning); requestAnimationFrame(playbackFrame);
 
 function effectiveVoiceHint(track) {
   const part=state.sections[Math.floor(follower.selectedBar/GROUP_SIZE)],id=sectionVoice(state,track,follower.selectedBar);
-  return ` 本段实际：${[voiceInfo,chordVoiceInfo,bassVoiceInfo][track](id).name}（${part.voices[track]==='inherit'?'跟随整曲':'本段指定'}），相对音量 ${part.volumes[track]}%。`;
+  return ` 本段实际：${[voiceInfo,chordVoiceInfo,bassVoiceInfo][track](id).name}（${part.voices[track]==='inherit'?'跟随整曲':'本段指定'}），相对音量 ${dynamicLabel(part.volumes[track],part.endVolumes[track])}。`;
 }
 function orchestrationDescription(index) {
   const part=state.sections[index];
-  return TRACKS.flatMap((track,i)=>!trackAudibleAt(state,i,index*GROUP_SIZE)?[]:[`${track.name}${i<3?'：'+[voiceInfo,chordVoiceInfo,bassVoiceInfo][i](sectionVoice(state,i,index*GROUP_SIZE)).name:''}${part.volumes[i]<100?` ${part.volumes[i]}%`:''}`]).join(' · ')||'本段静音';
+  return TRACKS.flatMap((track,i)=>!trackAudibleAt(state,i,index*GROUP_SIZE)?[]:[`${track.name}${i<3?'：'+[voiceInfo,chordVoiceInfo,bassVoiceInfo][i](sectionVoice(state,i,index*GROUP_SIZE)).name:''}${part.volumes[i]!==100||part.endVolumes[i]!==100?` ${dynamicLabel(part.volumes[i],part.endVolumes[i])}`:''}`]).join(' · ')||'本段静音';
 }
 function initOrchestrationControls() {
   const container=$('orchestration-tracks');
@@ -563,9 +567,9 @@ function initOrchestrationControls() {
       select.addEventListener('change',()=>commit(setSectionVoice(state,Math.floor(follower.selectedBar/GROUP_SIZE),i,select.value),`本段${track.name}音色已更新；音符与其他段配器保留，可撤销。`));label.append(select);card.append(label);
     }else{const hint=document.createElement('span');hint.className='muted';hint.textContent='沿用现有鼓组';card.append(hint);}
     const label=document.createElement('label');label.textContent='本段相对音量 ';const output=document.createElement('output');output.id=`section-volume-value-${i}`;
-    const input=document.createElement('input');input.type='range';input.min='0';input.max='100';input.step='5';input.id=`section-volume-${i}`;input.setAttribute('aria-label',`本段${track.name}相对音量`);
+    const input=document.createElement('input');input.type='range';input.min='0';input.max='100';input.step='5';input.id=`section-volume-${i}`;input.setAttribute('aria-label',`本段${track.name}相对音量`);input.title='调整会设为固定音量；起止渐变请打开动态编曲';
     input.addEventListener('input',()=>{output.value=input.value+'%';});
-    input.addEventListener('change',()=>{const index=Math.floor(follower.selectedBar/GROUP_SIZE),volume=Number(input.value);if(volume!==state.sections[index].volumes[i])commit(setSectionVolume(state,index,i,volume),`本段${track.name}相对音量：${volume}%；整曲音量保留，可撤销。`);});
+    input.addEventListener('change',()=>{const index=Math.floor(follower.selectedBar/GROUP_SIZE),volume=Number(input.value);if(volume!==state.sections[index].volumes[i])commit(setSectionVolume(state,index,i,volume),`本段${track.name}设为固定音量 ${volume}%；渐变恢复平稳，整曲音量保留，可撤销。`);});
     for(const control of [input,...(i<3?[card.querySelector('select')]:[])])control.addEventListener('focus',()=>{if(synth.playing){follower.select(follower.selectedBar,true);syncPlayback();}});
     label.append(output,input);card.append(label);container.append(card);
   });
@@ -573,12 +577,12 @@ function initOrchestrationControls() {
 function renderOrchestrationControls(index) {
   phraseEditor?.setAudition(orchestrationActive);
   const part=state.sections[index];$('orchestration-summary').textContent=`「${part.name}」· ${part.voices.some(id=>id!=='inherit')?'独立音色':'跟随整曲'}`;
-  TRACKS.forEach((_,i)=>{if(i<3){$(`section-voice-${i}`).value=part.voices[i];$(`section-voice-${i}`).disabled=exporting;}$(`section-volume-${i}`).value=part.volumes[i];$(`section-volume-${i}`).disabled=exporting;$(`section-volume-value-${i}`).value=part.volumes[i]+'%';});
-  $('reset-orchestration').disabled=exporting||(part.voices.every(id=>id==='inherit')&&part.volumes.every(n=>n===100));
+  TRACKS.forEach((_,i)=>{if(i<3){$(`section-voice-${i}`).value=part.voices[i];$(`section-voice-${i}`).disabled=exporting;}$(`section-volume-${i}`).value=part.volumes[i];$(`section-volume-${i}`).disabled=exporting;$(`section-volume-value-${i}`).value=dynamicLabel(part.volumes[i],part.endVolumes[i]);});
+  $('reset-orchestration').disabled=exporting||(part.voices.every(id=>id==='inherit')&&part.volumes.every(n=>n===100)&&part.endVolumes.every(n=>n===100));
   $('preview-section').disabled=exporting||!hasAudibleNotes(state,index*GROUP_SIZE,(index+1)*GROUP_SIZE);
   $('preview-section').textContent=orchestrationActive?'停止试听':'试听本段配器';$('preview-section').setAttribute('aria-pressed',String(orchestrationActive));
 }
-$('reset-orchestration').addEventListener('click',()=>commit(resetSectionOrchestration(state,Math.floor(follower.selectedBar/GROUP_SIZE)),'本段音色已跟随整曲，相对音量恢复 100%；音符、声部开关及和弦演奏方式保留，可撤销。'));
+$('reset-orchestration').addEventListener('click',()=>commit(resetSectionOrchestration(state,Math.floor(follower.selectedBar/GROUP_SIZE)),'本段音色已跟随整曲，起止音量恢复固定 100%；音符、声部开关及和弦演奏方式保留，可撤销。'));
 $('preview-section').addEventListener('click',async()=>{
   if(orchestrationActive){preview.stop();return;}stop();const start=Math.floor(follower.selectedBar/GROUP_SIZE)*GROUP_SIZE;
   try{await preview.playSection(state,start,active=>{orchestrationActive=active;renderOrchestrationControls(Math.floor(follower.selectedBar/GROUP_SIZE));$('orchestration-message').textContent=active?'正在试听本段四声部配器。':'试听已停止。';});}
@@ -609,7 +613,7 @@ function renderSectionControls() {
   }));
   const globalOff = TRACKS.filter((_, i) => !state.tracks[i].enabled || state.tracks[i].volume === 0).map(track => track.name);
   $('section-track-hint').textContent = globalOff.length ? `整曲静音：${globalOff.join('、')}。本段开关仍受整曲开关和音量控制。` : '本段开关只安排声部是否加入，关闭后音符仍可编辑。';
-  $('section-track-note').hidden = part.enabled[selectedTrack] && part.volumes[selectedTrack]>0;
+  $('section-track-note').hidden = part.enabled[selectedTrack] && Math.max(part.volumes[selectedTrack],part.endVolumes[selectedTrack])>0;
   $('section-track-note').textContent = `本段${TRACKS[selectedTrack].name}${part.enabled[selectedTrack]?'音量为 0%':'未加入'}；音符仍可编辑，请在段落配器中检查开关及音量。`;
   $('add-section').disabled = $('duplicate-section').disabled = state.barCount === 32 || exporting;
   $('move-section-left').disabled = index === 0 || exporting; $('move-section-right').disabled = index === state.sections.length - 1 || exporting;

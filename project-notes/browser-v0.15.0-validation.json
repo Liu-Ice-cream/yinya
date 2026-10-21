@@ -1,0 +1,25 @@
+{
+  "version": "0.15.0",
+  "date": "2026-10-21",
+  "browser": "Chromium in-app browser",
+  "scope": "Local app; new original preset-derived work only",
+  "passed": [
+    "v12 draft and all 17 existing library works load after v13 migration",
+    "Four independent track endpoint controls, templates and SVG curves render",
+    "Template changes and keyboard range edits update candidate only",
+    "Original and candidate audition switch exclusive playback state",
+    "Cancel preserves the exact original share snapshot",
+    "Apply commits endpoints and updates section card direction labels",
+    "Single undo and redo restore exact original and applied share snapshots",
+    "Escape discards an unapplied candidate without altering applied endpoints",
+    "Zero-start fade-in hides the static-zero-volume warning",
+    "390x844 viewport has no page or dialog horizontal overflow",
+    "Narrow viewport fourth-track template and sticky Apply action work",
+    "32-bar dynamic work saves as new library work 18 and reloads intact",
+    "Share link reopens 32 bars with the same four-track dynamic summary",
+    "Temporary share tab closes and the main saved identity stays at 18 works",
+    "32-bar MP3 and WAV both reach the ready-download state"
+  ],
+  "automated": {"tests":249,"newTests":24,"pcmRates":[44100,48000],"independentGainAndLimiterReference":true,"zeroFadeTailProtection":true,"mp3IndependentDecode":true},
+  "limits": ["Physical touch device not tested", "Two endpoints per four-bar section", "Adjacent section levels are set independently", "Older app versions cannot read schema 13"]
+}
