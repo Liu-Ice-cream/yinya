@@ -10,6 +10,7 @@ import { DRUM_PATTERNS } from './grooves.js';
 import { PreviewPlayer } from './preview.js';
 import { PlaybackFollower, playbackPosition, playbackRange, configurePlayback } from './playback.js';
 import { sectionVoice, sectionGain, setSectionVoice, setSectionVolume, resetSectionOrchestration } from './model.js';
+import { PhraseEditor } from './phrase-editor.js';
 
 const $ = id => document.getElementById(id);
 const KEYS = { draft: 'yinya.v11.draft', library: 'yinya.v11.library', preferences: 'yinya.v1.preferences' };
@@ -23,6 +24,8 @@ let pendingConfirmation = null;
 let workshopSession = null, workshopPreview = null;
 let melodySession = null, melodyPreview = null;
 let selectedNote = null;
+let phraseEditor = null, editorView = 'bar';
+function isPhraseView(){return editorView==='phrase'&&LONG_NOTE_TRACKS.includes(selectedTrack);}
 const newNoteLengths = { 0: 1, 2: 1 };
 const newNoteVelocities = { 0: 1, 2: 1 };
 let pitchRange = 'all', pitchNaming = 'solfege', chordPalette = 'recommended';
@@ -48,6 +51,7 @@ function readLegacy(kind) {
 const rawLibrary = savedLibrary === undefined ? readLegacy('library') : savedLibrary;
 let migratedDraft = false;
 const preferences = read(KEYS.preferences);
+editorView = preferences?.editorView==='phrase'?'phrase':'bar';
 pitchRange = ['all','low','high'].includes(preferences?.pitchRange) ? preferences.pitchRange : 'all';
 pitchNaming = preferences?.pitchNaming === 'notes' ? 'notes' : 'solfege';
 let clickPreview = preferences?.clickPreview !== false;
@@ -133,6 +137,7 @@ function renderTracks() {
 }
 function renderControls() {
   const t = TRACKS[selectedTrack], layer = state.tracks[selectedTrack];
+  $('editor-view-label').hidden = !LONG_NOTE_TRACKS.includes(selectedTrack); $('editor-view').value=editorView; $('editor-view').disabled=exporting;
   renderTheoryControls();
   $('open-workshop').disabled = $('open-melody').disabled = exporting;
   $('title').value = state.title; $('tempo').value = state.tempo;
@@ -162,6 +167,8 @@ function renderControls() {
   $('click-preview').checked = clickPreview;
   $('grid-tip').textContent = LONG_NOTE_TRACKS.includes(selectedTrack) ? '点色块选中，调整时长或删除；方向键移动，Delete 删除。' : synth.playing ? '点亮或移除格子，直接改变循环；方向键可移动焦点。' : clickPreview ? '点亮即可试听，再点一次移除；方向键可移动焦点。' : '点击添加，再点一次移除；开启「点击试听」可听见单音。';
   $('play').textContent = synth.playing ? '暂停播放' : '播放循环'; $('play').setAttribute('aria-pressed', String(synth.playing));
+  if(isPhraseView())$('grid-tip').textContent='拖动或使用按钮调整乐句；重叠和越界会整次取消，音符仍可一次撤销。';
+  phraseEditor?.update();
 }
 function phraseModeLabel() { return phraseMode === 'duet' ? '旋律＋和弦' : '仅旋律'; }
 function renderPhraseControls() {
@@ -181,11 +188,11 @@ function currentNote() {
   return note;
 }
 function renderNoteControls() {
-  $('note-tools').hidden = !LONG_NOTE_TRACKS.includes(selectedTrack);
+  $('note-tools').hidden = !LONG_NOTE_TRACKS.includes(selectedTrack)||isPhraseView();
   if (!LONG_NOTE_TRACKS.includes(selectedTrack)) return;
   $('note-length').setAttribute('aria-label', `${TRACKS[selectedTrack].name}音符时长`);
   const note = currentNote(), duration = note?.duration || newNoteLengths[selectedTrack];
-  const custom = $('note-length-custom'); custom.hidden = NOTE_LENGTHS.includes(duration); custom.value = duration; custom.textContent = `${duration} 格（自动收短）`;
+  const custom = $('note-length-custom'); custom.hidden = NOTE_LENGTHS.includes(duration); custom.value = duration; custom.textContent = `${duration} 格（自定义）`;
   $('note-length').value = duration;
   $('note-velocity').setAttribute('aria-label', `${TRACKS[selectedTrack].name}音符力度`);
   $('note-velocity').value = note ? state.tracks[selectedTrack].velocities[follower.selectedBar][note.start] : newNoteVelocities[selectedTrack];
@@ -256,6 +263,8 @@ function editCell(row, col) {
   }).catch(() => status(`已添加${label}，浏览器未能启动声音。可按「播放循环」重试。`));
 }
 function renderGrid() {
+  $('single-grid').hidden=isPhraseView();$('copy-bar').hidden=$('clear-bar').hidden=isPhraseView();phraseEditor?.update();
+  if(isPhraseView())return;
   const t = TRACKS[selectedTrack], bar = state.tracks[selectedTrack].bars[follower.selectedBar], cols = bar.length;
   const rows = gridRows();
   const grid = $('grid'), focused = grid.contains(document.activeElement) ? { ...document.activeElement.dataset } : null;
@@ -301,6 +310,7 @@ function syncPlayback() {
   const oldBar = follower.selectedBar, view = follower.update(synth.playhead, synth.playing);
   if (oldBar !== follower.selectedBar) { selectedNote = null; renderTracks(); renderSectionControls(); renderTheoryControls(); renderGrid(); renderNoteControls(); renderPhraseControls(); }
   renderBars(view);
+  phraseEditor?.playback(view);
   const active = view.playing && view.bar === follower.selectedBar;
   $('position').textContent = view.playing ? `播放 ${view.bar + 1} / ${state.barCount} 节 · ${view.beat + 1} 拍${active ? '' : ` · 查看第 ${follower.selectedBar + 1} 节`}` : `编辑第 ${follower.selectedBar + 1} 节 · 循环 ${state.barCount} 小节`;
   const col = selectedTrack === 1 ? view.beat : view.step;
@@ -311,6 +321,7 @@ function syncPlayback() {
 function playbackFrame() {
   if (wasPlaying && !synth.playing) { stop(); status('已播放到整曲结尾。'); }
   if (synth.playing && Math.floor(synth.playhead * 16) !== lastStep) syncPlayback();
+  if(!synth.playing&&orchestrationActive){const seconds=preview.elapsedSeconds();if(seconds!==null){const steps=Math.floor(seconds*state.tempo/60*4),start=Math.floor(follower.selectedBar/GROUP_SIZE)*GROUP_SIZE;phraseEditor?.playback({playing:true,bar:start+Math.floor(steps/16),step:steps%16});}}
   wasPlaying = synth.playing; requestAnimationFrame(playbackFrame);
 }
 function startTransport(mode) {
@@ -330,7 +341,7 @@ $('loop-section').addEventListener('click', () => {
 });
 $('play-from-section').addEventListener('click', () => startTransport('from-section'));
 function savePreferences(message) {
-  try { localStorage.setItem(KEYS.preferences, JSON.stringify({ clickPreview, followPlayback: follower.enabled, exportEnding, phraseMode, pitchRange, pitchNaming })); status(message); }
+  try { localStorage.setItem(KEYS.preferences, JSON.stringify({ clickPreview, followPlayback: follower.enabled, exportEnding, phraseMode, pitchRange, pitchNaming, editorView })); status(message); }
   catch { status(message + ' 这次设置未能保存到浏览器。'); }
 }
 $('click-preview').addEventListener('change', e => {
@@ -521,6 +532,13 @@ $('drum-pattern').replaceChildren(...DRUM_PATTERNS.map(pattern=>{const option=do
 $('chord-style').replaceChildren(...CHORD_STYLES.map(style => { const option = document.createElement('option'); option.value = style.id; option.textContent = style.name; return option; }));
 $('chord-voice').replaceChildren(...CHORD_VOICES.map(voice => { const option = document.createElement('option'); option.value = voice.id; option.textContent = voice.name; return option; }));
 $('voice').replaceChildren(...VOICES.map(voice => { const option = document.createElement('option'); option.value = voice.id; option.textContent = voice.name; return option; }));
+phraseEditor = new PhraseEditor($('phrase-editor'),{
+  get:()=>{const start=Math.floor(follower.selectedBar/GROUP_SIZE)*GROUP_SIZE;return {state,track:selectedTrack,start,active:isPhraseView(),disabled:exporting,range:pitchRange,naming:pitchNaming,auditioning:orchestrationActive,canAudition:hasAudibleNotes(state,start,start+GROUP_SIZE)};},
+  beforeEdit:()=>stop(),status,
+  commit:(next,message)=>{selectedNote=null;commit(next,message);},
+  auditionPhrase:()=>$('preview-section').click(),
+  auditionNote:note=>{if(note&&clickPreview&&!exporting&&!synth.playing){const start=Math.floor(follower.selectedBar/GROUP_SIZE)*GROUP_SIZE;preview.play(state,selectedTrack,0,{bar:start+Math.floor(note.step/16),step:note.step%16,pitch:note.pitch}).catch(()=>status('音符已保留，浏览器未能启动声音。'));}},
+});
 initOrchestrationControls(); renderPresets(); syncAudio(); render(); if (consumedShare || migratedDraft) draftSave();
 status(clickPreview ? `点亮一个格子试听，或按「播放循环」听完整 ${state.barCount} 小节。` : `点击试听已关闭；可以安静编辑，或按「播放循环」听完整 ${state.barCount} 小节。`);
 if (storageWarning) status(storageWarning); requestAnimationFrame(playbackFrame);
@@ -552,6 +570,7 @@ function initOrchestrationControls() {
   });
 }
 function renderOrchestrationControls(index) {
+  phraseEditor?.setAudition(orchestrationActive);
   const part=state.sections[index];$('orchestration-summary').textContent=`「${part.name}」· ${part.voices.some(id=>id!=='inherit')?'独立音色':'跟随整曲'}`;
   TRACKS.forEach((_,i)=>{if(i<3){$(`section-voice-${i}`).value=part.voices[i];$(`section-voice-${i}`).disabled=exporting;}$(`section-volume-${i}`).value=part.volumes[i];$(`section-volume-${i}`).disabled=exporting;$(`section-volume-value-${i}`).value=part.volumes[i]+'%';});
   $('reset-orchestration').disabled=exporting||(part.voices.every(id=>id==='inherit')&&part.volumes.every(n=>n===100));
@@ -868,3 +887,5 @@ $('melody-apply').addEventListener('click', () => {
   };
   if (session.base.tracks[0].bars.slice(target.start, target.end).some(bar => bar.some(n => n >= 0))) confirmChange(`将${options.mode === 'repitch' ? '调整' : '替换'}第 ${target.start + 1}–${target.end} 小节的旋律${options.mode === 'repitch' ? '音高，节奏、时长与力度保留' : '音符'}。${options.mode === 'answer' ? '前两小节原样保留。' : ''}伴奏与其他段落保留，之后可以撤销。`, apply, '应用旋律'); else apply();
 });
+
+$('editor-view').addEventListener('change',e=>{preview.stop();selectedNote=null;editorView=e.target.value==='phrase'?'phrase':'bar';renderControls();renderGrid();syncPlayback();savePreferences(editorView==='phrase'?'已打开四小节乐句编辑台；选择视图不会改动作品。':'已回到单小节积木视图；作品内容保留。');});

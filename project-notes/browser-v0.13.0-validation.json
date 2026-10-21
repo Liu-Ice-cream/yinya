@@ -1,0 +1,39 @@
+{
+  "version": "0.13.0",
+  "date": "2026-10-21",
+  "environment": "Windows desktop Chromium in-app browser; real browser mouse drags; 390 × 844 CSS-pixel responsive emulation, not a physical phone",
+  "automatedTests": {
+    "total": 207,
+    "passed": 207,
+    "newPhraseTests": 24,
+    "newPointerTransactionTests": 6,
+    "compatibility": "Frozen v0.7.0–v0.12.0 canonical audio conversions; schema 11 and storage keys unchanged",
+    "scope": "Atomic group edits, strict insertion and paste, time collisions independent of pitch, bar/phrase/pitch bounds, dynamics, copy independence, inverse restoration, 200 sequential attempts, actual-semitone rectangle selection, audio-start clock, dual-rate PCM reference, preview cancellation, 32-bar WAV and independent stereo MP3 decoding"
+  },
+  "browser": {
+    "library": "15 existing works retained; one newly saved edited work, total 16",
+    "views": "Single-bar grid and phrase view switch without changing the shared snapshot; view preference survives reload; drums retain legacy grid; bass supports phrase editing",
+    "keyboard": "Enter adds at current write cursor; ArrowUp changes its pitch before insertion; actual label confirms intended pitch and step",
+    "clipboard": "Two notes copied from first half and pasted into last half with exact matching bars; bass paste retains relative pitch ID and plays in bass register; conflicting paste is rejected",
+    "undoRedo": "One paste is exactly reversible in one undo and one redo, checked by share URL equality",
+    "preservation": "All backing tracks preserved after melody paste; schema remains 11; group selection survives pitch and duration edits",
+    "mouse": "Actual browser horizontal drag moves onset by one snapped step; vertical drag changes pitch; right-handle drag changes duration; overlapping resize rejects and retains the prior note; blank-area rectangle selects both intersected notes",
+    "audition": "Four-voice audition starts/stops; playback line becomes visible after audio starts and advances; note edits stop audition",
+    "persistence": "Edited theme shortened to three-step notes and shifted by one step, expanded by repeat to 32 bars, saved and reloaded; own share reopens exactly",
+    "exports": "Full 32-bar MP3 and WAV generated with expected names; export cancellation plus undo of a temporary pitch drag leaves the saved shared snapshot identical",
+    "consoleErrors": []
+  },
+  "responsive": {
+    "viewport": [390, 844],
+    "documentClientWidth": 375,
+    "documentScrollWidth": 375,
+    "panelClientWidth": 317,
+    "panelScrollWidth": 317,
+    "gridClientWidth": 280,
+    "gridScrollWidth": 1224,
+    "internalScrollTest": "Horizontal scroll reaches 188 px while pitch-label left remains 40 px; page has no horizontal overflow",
+    "controls": "Selection, batch velocity and toolbar controls usable; page scroll reaches all controls; native touch branch separately unit tested"
+  },
+  "screenshots": ["yinya-v0.13.0-desktop.jpg", "yinya-v0.13.0-mobile.jpg"],
+  "limits": ["Only current four-bar melody or bass phrase", "Monophonic notes and no cross-bar sustains", "Clipboard and selection are page-local transient state", "No cross-section multi-selection", "Physical-phone and multi-browser long-piece performance unverified"]
+}

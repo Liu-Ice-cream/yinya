@@ -113,8 +113,9 @@ export class PreviewPlayer {
     source.onended = () => { source.disconnect(); gain.disconnect(); if (this.active?.source === source) { this.active = null; ended?.(); } };
     try { source.start(); }
     catch (error) { source.onended = null; source.disconnect(); gain.disconnect(); throw error; }
-    this.active = { source, gain };
+    this.active = { source, gain, startedAt: start };
   }
+  elapsedSeconds() { return this.active ? Math.max(0,this.context.currentTime-this.active.startedAt) : null; }
   playPhrase(value, start, changed = () => {}, mode = 'melody') {
     return this.playSnapshot(() => phraseState(value, start, mode), changed, [0, 1]);
   }
