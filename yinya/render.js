@@ -1,7 +1,8 @@
 import { Synth } from '../synth/synth.ts';
 import { SongRenderer } from '../editor/SongRenderer.ts';
 import { audioSong } from './song.js';
-import { validate, songJSON, GROUP_SIZE, trackAudibleAt, sectionVoice } from './model.js';
+import { validate, songJSON, GROUP_SIZE, trackAudibleAt, sectionVoice, sectionDrumKit } from './model.js';
+import {drumReleaseSeconds} from './drum-kits.js';
 import { voiceInfo, releaseSeconds, chordVoiceInfo, chordReleaseSeconds, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
 
 export function sectionState(value, start) {
@@ -13,6 +14,7 @@ export function sectionState(value, start) {
     track.bars = track.bars.slice(start, start + GROUP_SIZE);
     if (track.durations) track.durations = track.durations.slice(start, start + GROUP_SIZE);
     if (track.velocities) track.velocities = track.velocities.slice(start, start + GROUP_SIZE);
+    if(track.drumVelocities)track.drumVelocities=track.drumVelocities.slice(start,start+GROUP_SIZE);
   });
   return state;
 }
@@ -48,6 +50,7 @@ export class AudioRenderer {
         if(ending==='natural')this.tailSeconds=Math.max(this.tailSeconds,release-silence);
       });
     }
+    json.channels[3].patterns.forEach((p,bar)=>{const id=sectionDrumKit(state,bar);if(id==='original'||!trackAudibleAt(state,3,bar)||!p.notes.length)return;hasNewVoice=true;const lastEnd=bar*16+Math.max(...p.notes.map(n=>n.points.at(-1).tick)),silence=(state.barCount*16-lastEnd)*60/state.tempo/4;if(ending==='natural')this.tailSeconds=Math.max(this.tailSeconds,drumReleaseSeconds(id,state.tempo)-silence);});
     if (this.tailSeconds) {
       json.loopBars++;
       json.channels.forEach(channel => channel.sequence.push(0));

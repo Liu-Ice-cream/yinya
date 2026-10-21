@@ -2,7 +2,8 @@ import { Synth } from '../synth/synth.ts';
 import { PITCH_VALUES } from './theory.js';
 import { Config } from '../synth/SynthConfig.ts';
 import { audioSong } from './song.js';
-import { TRACKS, CHORDS, GROUP_SIZE, songJSON, validate, pitchedNoteAt, LONG_NOTE_TRACKS, chordNotes, sectionChordStyle, trackAudibleAt, hasAudibleNotes, sectionVoice, sectionGain } from './model.js';
+import { TRACKS, CHORDS, GROUP_SIZE, songJSON, validate, pitchedNoteAt, LONG_NOTE_TRACKS, chordNotes, sectionChordStyle, trackAudibleAt, hasAudibleNotes, sectionVoice, sectionGain, sectionDrumKit } from './model.js';
+import {drumReleaseSeconds} from './drum-kits.js';
 import { releaseSeconds, voiceInfo, chordReleaseSeconds, chordVoiceInfo, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
 import { AudioRenderer, phraseState, sectionState, fadeEnd } from './render.js';
 
@@ -37,8 +38,14 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   let seconds = PREVIEW_SECONDS;
   const positioned = notePosition?.step !== undefined;
   const style = sectionChordStyle(state,bar);
-  const sequencePreview = positioned || (trackIndex === 1 && (style !== 'block' || row >= 4));
-  if (sequencePreview) {
+  const drumSequence=trackIndex===3&&(notePosition?.drumLane!==undefined||sectionDrumKit(state,bar)!=='original');
+  const sequencePreview = drumSequence || positioned || (trackIndex === 1 && (style !== 'block' || row >= 4));
+  if(drumSequence){
+    const lane=notePosition?.drumLane??2-row;if(![0,1,2].includes(lane))throw new Error('试听鼓点行无效');
+    const source=json.channels[0].patterns[bar].notes.find(n=>n.points[0].tick===offsetStep&&n.pitches.includes(lane*4));if(!source)throw new Error('试听鼓点不存在');
+    const isolated={...source,pitches:[lane*4],...(source.yinyaDrumGains?{yinyaDrumGains:{[lane*4]:source.yinyaDrumGains[lane*4]}}:{}),points:source.points.map(p=>({...p,tick:p.tick-offsetStep}))};
+    json.channels[0].patterns=[{...(instruments?{instruments}:{}),notes:[isolated]}];json.channels[0].sequence=[1];json.loopBars=1;seconds=60/state.tempo/4+drumReleaseSeconds(sectionDrumKit(state,bar),state.tempo);
+  }else if (sequencePreview) {
     if (![0, 1, 2].includes(trackIndex)) throw new Error('按实际时长试听仅支持旋律、和弦与贝斯');
     let start, duration, release, notes;
     if (LONG_NOTE_TRACKS.includes(trackIndex)) {
@@ -88,7 +95,7 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   const left = new Float32Array(count), right = new Float32Array(count);
   synth.synthesize(left, right, count, sequencePreview);
   if(!sequencePreview&&!dynamic&&gain!==1)for(let i=0;i<count;i++){left[i]*=gain;right[i]*=gain;}
-  const shapedEnding = trackIndex === 0 ? !voiceInfo(id).legacy : trackIndex === 2 ? !bassVoiceInfo(id).legacy : trackIndex === 1 && (!chordVoiceInfo(id).legacy || style !== 'block');
+  const shapedEnding = trackIndex === 0 ? !voiceInfo(id).legacy : trackIndex === 2 ? !bassVoiceInfo(id).legacy : trackIndex === 3 ? sectionDrumKit(state,bar)!=='original' : trackIndex === 1 && (!chordVoiceInfo(id).legacy || style !== 'block');
   if (sequencePreview && shapedEnding) fadeEnd(left, right, Math.ceil(sampleRate * .02));
   return { left, right, sampleRate };
 }

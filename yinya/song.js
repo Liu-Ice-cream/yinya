@@ -6,6 +6,7 @@ import { Song } from '../synth/synth.ts';
 // This Song is used directly, never round-tripped through BeepBox serialization.
 export function audioSong(json) {
   const song = new Song(); song.fromJsonObject(json);
+  song.channels.forEach((channel,c)=>channel.instruments.forEach((instrument,i)=>{const ticks=json.channels[c].instruments[i].yinyaDrumReleaseTicks;if(ticks!==undefined){if(json.channels[c].type!=='drum'||ticks!==6)throw new Error('鼓组收尾设置无效');instrument.drumsetReleaseTicks=ticks;}}));
   if(json.yinyaDynamics!==undefined){
     const curves=validateDynamics(json.yinyaDynamics,json.channels.length),offset=json.yinyaDynamicsOffset??0;
     if(!Number.isFinite(offset)||offset<0||offset>32)throw new Error('音量曲线位置无效');
@@ -21,6 +22,8 @@ export function audioSong(json) {
   }
   song.channels.forEach((channel, c) => channel.patterns.forEach((pattern, p) => {
     pattern.notes.forEach((note, n) => {
+      const drumGains=json.channels[c].patterns[p].notes[n]?.yinyaDrumGains;
+      if(drumGains!==undefined){if(!drumGains||typeof drumGains!=='object'||Array.isArray(drumGains)||Object.entries(drumGains).some(([pitch,gain])=>json.channels[c].type!=='drum'||!['0','4','8'].includes(pitch)||!Number.isFinite(gain)||gain<.2||gain>1.35||!note.pitches.includes(Number(pitch))))throw new Error('逐击力度无效');note.drumGains={...drumGains};}
       const gain = json.channels[c].patterns[p].notes[n]?.yinyaGain ?? 1;
       if (![.55, 1, 1.35].includes(gain)) throw new Error('音符力度超出支持范围');
       const chordGain=json.channels[c].patterns[p].notes[n]?.yinyaChordGain ?? 1;

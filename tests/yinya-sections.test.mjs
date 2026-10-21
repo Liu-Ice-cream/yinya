@@ -19,8 +19,8 @@ test('v1-v7 acquire all-enabled named sections without changing old instrument, 
     const old = preset('moon'); old.version = version; delete old.sections;
     if (version >= 4) old.voice = 'piano-v1'; if (version >= 5) old.chordVoice = 'chord-acoustic-guitar-v1'; if (version >= 6) old.chordStyle = 'arpeggio-v1';
     if (version < 3) delete old.tracks[0].durations; if (version < 7) delete old.tracks[2].durations;
-    const before = structuredClone(old), upgraded = validate(old); assert.equal(upgraded.version, 13);
-    assert.deepEqual(upgraded.sections, [{id:'s1',name:'第 1 段',enabled:[true,true,true,true],chordStyle:'inherit',voices:['inherit','inherit','inherit'],volumes:[100,100,100,100],endVolumes:[100,100,100,100]}]);
+    const before = structuredClone(old), upgraded = validate(old); assert.equal(upgraded.version, 14);
+    assert.deepEqual(upgraded.sections, [{id:'s1',name:'第 1 段',enabled:[true,true,true,true],chordStyle:'inherit',drumKit:'inherit',voices:['inherit','inherit','inherit'],volumes:[100,100,100,100],endVolumes:[100,100,100,100]}]);
     assert.deepEqual(upgraded.tracks.map(t => t.bars), old.tracks.map(t => t.bars)); assert.deepEqual(old, before);
     assert.equal(upgraded.voice, old.voice); assert.equal(upgraded.chordVoice, old.chordVoice); assert.equal(upgraded.chordStyle, old.chordStyle);
     assert.deepEqual(decode('#yinya='+Buffer.from(JSON.stringify(old)).toString('base64url')), upgraded);

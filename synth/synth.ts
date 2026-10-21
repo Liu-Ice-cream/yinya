@@ -322,6 +322,8 @@ export function makeNotePin(interval: number, time: number, size: number): NoteP
 }
 
 export class Note {
+	// Runtime per-pitch drum gain, omitted from the BeepBox format.
+	public drumGains?: {[pitch: number]: number};
 	public pitches: number[];
 	public pins: NotePin[];
 	public start: number;
@@ -997,6 +999,8 @@ interface LegacySettings {
 }
 
 export class Instrument {
+	// Runtime-only release override for locally defined Yinya drum kits.
+	public drumsetReleaseTicks: number = Config.drumsetFadeOutTicks;
 	public type: InstrumentType = InstrumentType.chip;
 	public preset: number = 0;
 	public chipWave: number = 2;
@@ -1050,6 +1054,7 @@ export class Instrument {
 	}
 	
 	public setTypeAndReset(type: InstrumentType, isNoiseChannel: boolean): void {
+		this.drumsetReleaseTicks = Config.drumsetFadeOutTicks;
 		this.type = type;
 		this.preset = type;
 		this.volume = 0;
@@ -1760,7 +1765,7 @@ export class Instrument {
 	}
 	
 	public getFadeOutTicks(): number {
-		return (this.type == InstrumentType.drumset) ? Config.drumsetFadeOutTicks : Synth.fadeOutSettingToTicks(this.fadeOut)
+		return (this.type == InstrumentType.drumset) ? this.drumsetReleaseTicks : Synth.fadeOutSettingToTicks(this.fadeOut)
 	}
 	
 	public getChord(): Chord {
@@ -6071,6 +6076,7 @@ export class Synth {
 			const pitchExpressionEnd:   number = Math.pow(2.0,   -(endPitch - expressionReferencePitch) / pitchDamping);
 			tone.prevPitchExpressions[0] = pitchExpressionEnd;
 			let settingsExpressionMult: number = baseExpression * noteFilterExpression;
+			if (instrument.type == InstrumentType.drumset) settingsExpressionMult *= tone.note?.drumGains?.[tone.pitches[0]] ?? 1;
 			
 			if (instrument.type == InstrumentType.noise) {
 				settingsExpressionMult *= Config.chipNoises[instrument.chipNoise].expression;

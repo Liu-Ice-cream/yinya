@@ -26,7 +26,7 @@ function fakeContext(){return {sampleRate:44100,currentTime:0,sources:[],resume:
 
 test('frozen v0.14.0 songs migrate equal endpoints without changing notes, voices or canonical audio',async()=>{
   const fixture=JSON.parse(await readFile(new URL('./fixtures/yinya-v0140-compat.json',import.meta.url)));assert.equal(fixture.source,'v0.14.0');
-  for(const {state,songSha256} of fixture.cases){const before=structuredClone(state),next=validate(state);assert.deepEqual(next,{...state,version:VERSION,sections:state.sections.map(p=>({...p,endVolumes:[...p.volumes]}))});assert.equal(createHash('sha256').update(JSON.stringify(canonical(songJSON(next)))).digest('hex'),songSha256);assert.equal(audioSong(songJSON(next)).channelGainEnvelope,null);assert.deepEqual(state,before);}
+  for(const {state,songSha256} of fixture.cases){const before=structuredClone(state),next=validate(state);assert.deepEqual(next,{...state,version:VERSION,drumKit:"original",tracks:state.tracks.map((t,i)=>i===3?{...t,drumVelocities:t.bars.map(()=>Array(16).fill(13))}:t),sections:state.sections.map(p=>({...p,drumKit:"inherit",endVolumes:[...p.volumes]}))});assert.equal(createHash('sha256').update(JSON.stringify(canonical(songJSON(next)))).digest('hex'),songSha256);assert.equal(audioSong(songJSON(next)).channelGainEnvelope,null);assert.deepEqual(state,before);}
 });
 test('schema thirteen validates complete bounded integer endpoints without repairing malformed works',()=>{
   const s=preset('hold-dawn'),before=structuredClone(s);

@@ -37,7 +37,7 @@ test('v1 through v5 migrate to block performance, retaining v5 chord timbre, v4 
     state.voice = version >= 4 ? 'piano-v1' : 'rounded'; state.chordVoice = version >= 5 ? 'chord-electric-piano-v1' : 'rounded'; delete state.chordStyle;
     if (version < 3) delete state.tracks[0].durations; if (version === 1) delete state.barCount;
     const before = structuredClone(state), upgraded = validate(state);
-    assert.equal(upgraded.version, 13); assert.equal(upgraded.chordStyle, 'block'); assert.equal(upgraded.voice, state.voice); assert.equal(upgraded.chordVoice, state.chordVoice);
+    assert.equal(upgraded.version, 14); assert.equal(upgraded.chordStyle, 'block'); assert.equal(upgraded.voice, state.voice); assert.equal(upgraded.chordVoice, state.chordVoice);
     assert.equal(upgraded.tracks[0].durations[3][12], version < 3 ? 1 : 4); assert.deepEqual(state, before);
     const notes = songJSON(upgraded).channels[1].patterns[0].notes;
     assert.equal(notes.length, 2); assert.deepEqual(notes.map(n => n.points.map(p => p.tick)), [[0, 4], [8, 12]]);
