@@ -42,7 +42,7 @@ test('v1 through v4 migrate to original rounded chords, preserving v4 melody ins
     if (version < 3) delete old.tracks[0].durations;
     if (version === 1) delete old.barCount;
     const before = structuredClone(old), migrated = validate(old);
-    assert.equal(migrated.version, 14); assert.equal(migrated.chordVoice, 'rounded'); assert.equal(migrated.voice, old.voice);
+    assert.equal(migrated.version, 15); assert.equal(migrated.chordVoice, 'rounded'); assert.equal(migrated.voice, old.voice);
     assert.equal(migrated.tracks[0].durations[3][12], version < 3 ? 1 : 4); assert.deepEqual(old, before);
   }
   const unknown = { ...preset('moon'), chordVoice: 'chord-future-v8' }, before = structuredClone(unknown);

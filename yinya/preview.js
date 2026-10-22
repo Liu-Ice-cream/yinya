@@ -3,6 +3,7 @@ import { PITCH_VALUES } from './theory.js';
 import { Config } from '../synth/SynthConfig.ts';
 import { audioSong } from './song.js';
 import { TRACKS, CHORDS, GROUP_SIZE, songJSON, validate, pitchedNoteAt, LONG_NOTE_TRACKS, chordNotes, sectionChordStyle, trackAudibleAt, hasAudibleNotes, sectionVoice, sectionGain, sectionDrumKit } from './model.js';
+import {voicedPitches,chordInversion} from './chord-expression.js';
 import {drumReleaseSeconds} from './drum-kits.js';
 import { releaseSeconds, voiceInfo, chordReleaseSeconds, chordVoiceInfo, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
 import { AudioRenderer, phraseState, sectionState, fadeEnd } from './render.js';
@@ -13,7 +14,7 @@ const HOLD_SECONDS = .25;
 export function previewPitches(trackIndex, row, state = null, position = null) {
   const track = TRACKS[trackIndex], shift = state?.transpose ?? 0;
   if (!track || !Number.isInteger(row) || row < 0) throw new Error('试听音符超出范围');
-  if (track.id === 'chords') { if(!CHORDS[row])throw new Error('试听和弦超出范围');return CHORDS[row].map(p=>p+shift); }
+  if (track.id === 'chords') { if(!CHORDS[row])throw new Error('试听和弦超出范围');const code=position?.step!==undefined?state?.tracks[1].chordVoicings[position.bar]?.[position.step]:1;return voicedPitches(row,chordInversion(code??1),shift); }
   if (track.id === 'drums') { if(row>2)throw new Error('试听鼓点超出范围');return [[8],[4],[0]][row]; }
   const pitch=position?.pitch ?? (row<8?7-row:-1);
   if(!Number.isInteger(pitch)||PITCH_VALUES[pitch]===undefined)throw new Error('试听音高超出范围');

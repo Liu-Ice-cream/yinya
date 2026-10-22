@@ -22,7 +22,7 @@ test('v1 through v6 preserve separate short bass onsets, existing melody lengths
     state.tracks[2].bars[0] = Array(16).fill(-1); state.tracks[2].bars[0][0] = 2; state.tracks[2].bars[0][1] = 2;
     if (version < 3) delete state.tracks[0].durations; if (version === 1) delete state.barCount;
     const before = structuredClone(state), upgraded = validate(state);
-    assert.equal(upgraded.version, 14); assert.equal(upgraded.voice, state.voice); assert.equal(upgraded.chordVoice, state.chordVoice); assert.equal(upgraded.chordStyle, state.chordStyle);
+    assert.equal(upgraded.version, 15); assert.equal(upgraded.voice, state.voice); assert.equal(upgraded.chordVoice, state.chordVoice); assert.equal(upgraded.chordStyle, state.chordStyle);
     assert.deepEqual(upgraded.tracks[2].durations, Array.from({ length: 4 }, () => Array(16).fill(1)));
     assert.deepEqual(upgraded.tracks[2].bars, state.tracks[2].bars); assert.equal(upgraded.tracks[0].durations[3][12], version < 3 ? 1 : 4);
     assert.deepEqual(songJSON(upgraded).channels[2].patterns[0].notes.map(n => [n.pitches[0], ...n.points.map(p => p.tick)]), [[28, 0, 1], [28, 1, 2]]);
@@ -126,5 +126,5 @@ test('the app can reimport its full sixteen-bar pretty JSON backup, while oversi
   const backup = JSON.stringify(state, null, 2); assert.ok(Buffer.byteLength(backup) > 20000); assert.deepEqual(parseBackup(backup), validate(state));
   const compact = JSON.stringify(blank('')), padded = compact + ' '.repeat(MAX_BACKUP_BYTES - Buffer.byteLength(compact));
   assert.deepEqual(parseBackup(padded), validate(blank(''))); assert.throws(() => parseBackup(padded + ' '));
-  assert.throws(() => parseBackup('not json')); assert.throws(() => parseBackup(JSON.stringify({ ...state, version: 15 })));
+  assert.throws(() => parseBackup('not json')); assert.throws(() => parseBackup(JSON.stringify({ ...state, version: 16 })));
 });

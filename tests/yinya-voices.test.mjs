@@ -29,7 +29,7 @@ test('v1 through v3 keep legacy timbres and note timing; new voices round-trip w
     if (version < 3) delete state.tracks[0].durations;
     if (version === 1) delete state.barCount;
     const before = structuredClone(state), upgraded = validate(state);
-    assert.equal(upgraded.voice, voice.id); assert.equal(upgraded.version, 14);
+    assert.equal(upgraded.voice, voice.id); assert.equal(upgraded.version, 15);
     assert.equal(upgraded.tracks[0].durations[0][0], version < 3 ? 1 : 8);
     const note = songJSON(upgraded).channels[0].patterns[0].notes[0];
     assert.deepEqual(note.points.map(p => [p.tick, p.volume]), [[0, 90], [version < 3 ? 1 : 8, 0]]);

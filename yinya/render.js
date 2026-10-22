@@ -15,6 +15,7 @@ export function sectionState(value, start) {
     if (track.durations) track.durations = track.durations.slice(start, start + GROUP_SIZE);
     if (track.velocities) track.velocities = track.velocities.slice(start, start + GROUP_SIZE);
     if(track.drumVelocities)track.drumVelocities=track.drumVelocities.slice(start,start+GROUP_SIZE);
+    if(track.chordVoicings)track.chordVoicings=track.chordVoicings.slice(start,start+GROUP_SIZE);
   });
   return state;
 }
