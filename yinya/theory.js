@@ -45,5 +45,6 @@ export function pitchRows(state,track,bar,range='all',naming='solfege') {
 }
 export function chordRows(state,bar,all=false) {
   const choices=all?CHORD_DEFINITIONS.map((_,id)=>id):state.scale==='minor'?[11,18,14,12,13,15,16]:[0,6,17,4,5,1,10,7,2,3];
-  return [...new Set([...choices,...state.tracks[1].bars[bar].filter(n=>n>=0)])].map(id=>({id,label:chordName(state,id)}));
+  const held=[];const t=state.tracks[1];for(let b=Math.floor(bar/4)*4;b<bar;b++)for(let beat=0;beat<4;beat++)if(t.bars[b][beat]>=0&&b*4+beat+(t.chordDurations?.[b]?.[beat]??1)>bar*4)held.push(t.bars[b][beat]);
+  return [...new Set([...choices,...held,...state.tracks[1].bars[bar].filter(n=>n>=0)])].map(id=>({id,label:chordName(state,id)}));
 }

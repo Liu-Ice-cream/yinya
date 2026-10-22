@@ -38,6 +38,21 @@ export function renderPreview(value, trackIndex, row, sampleRate = 44100, notePo
   const instruments=json.channels[0].patterns[bar].instruments;
   let seconds = PREVIEW_SECONDS;
   const positioned = notePosition?.step !== undefined;
+  if(trackIndex===1&&positioned&&layer.chordDurations[bar]?.[notePosition.step]>1){
+    if(!Number.isInteger(notePosition.step)||notePosition.step<0||notePosition.step>3||layer.bars[bar][notePosition.step]!==row)throw new Error('试听和弦不存在');
+    const step=notePosition.step,duration=layer.chordDurations[bar][step],start=bar*16+step*4,end=start+duration*4;
+    const count=Math.ceil(duration/4)+1,source=json.channels[0].patterns,fragments=[];
+    for(let b=bar;b<=Math.floor((end-1)/16);b++)for(const n of source[b].notes){
+      const at=b*16+n.points[0].tick;if(at>=start&&at<end)fragments.push({...n,points:n.points.map(p=>({...p,tick:b*16+p.tick-start}))});
+    }
+    // A held fragment split by the original bar line is rejoined after rebasing.
+    for(let i=fragments.length-1;i>0;i--){const a=fragments[i-1],b=fragments[i];if(b.continuesLastPattern&&a.points.at(-1).tick===b.points[0].tick&&JSON.stringify(a.pitches)===JSON.stringify(b.pitches)){a.points[a.points.length-1]=b.points.at(-1);fragments.splice(i,1);}}
+    json.channels[0].patterns=Array.from({length:count},(_,i)=>({...(instruments?{instruments}:{}),notes:fragments.flatMap(n=>{const left=Math.max(i*16,n.points[0].tick),right=Math.min((i+1)*16,n.points.at(-1).tick);return left>=right?[]:[{...n,continuesLastPattern:left>n.points[0].tick,points:[{...n.points[0],tick:left-i*16},{...n.points.at(-1),tick:right-i*16}]}];})}));
+    json.channels[0].sequence=Array.from({length:count},(_,i)=>i+1);json.loopBars=count;json.yinyaDynamicsOffset=bar+step/4;
+    const synth=new Synth(audioSong(json));synth.samplesPerSecond=sampleRate;synth.loopRepeatCount=0;
+    const seconds=duration*60/state.tempo+chordReleaseSeconds(id,state.tempo),length=Math.ceil(seconds*sampleRate),left=new Float32Array(length),right=new Float32Array(length);
+    synth.synthesize(left,right,length,true);fadeEnd(left,right,Math.ceil(sampleRate*.02));return {left,right,sampleRate};
+  }
   const style = sectionChordStyle(state,bar);
   const drumSequence=trackIndex===3&&(notePosition?.drumLane!==undefined||sectionDrumKit(state,bar)!=='original');
   const sequencePreview = drumSequence || positioned || (trackIndex === 1 && (style !== 'block' || row >= 4));

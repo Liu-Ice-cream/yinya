@@ -1,7 +1,7 @@
 // Original, local melody rules. Candidates are ordinary editable notes.
 import { validate, GROUP_SIZE, CHORDS } from './model.js';
 import { PITCH_VALUES, pitchId, scaleInfo } from './theory.js';
-import { harmonicRuns } from './accompaniment.js';
+import { harmonicRunsAt } from './accompaniment.js';
 
 function freeze(value) { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
 export const MELODY_STYLES = freeze([
@@ -32,9 +32,9 @@ export function melodyHarmonyInfo(value,start,end) {
   const state=validate(value);
   if(!Number.isInteger(start)||!Number.isInteger(end)||start<0||end<=start||end>state.barCount)throw new Error('和声检查范围无效');
   const intervals=scaleInfo(state.scale).intervals,unmatched=new Set();let emptyBars=0;
-  for(const bar of state.tracks[1].bars.slice(start,end)){
-    if(bar.every(n=>n<0))emptyBars++;
-    for(const chord of bar)if(chord>=0&&!CHORDS[chord].some(p=>intervals.includes(p%12)))unmatched.add(chord);
+  for(const [offset,bar] of state.tracks[1].bars.slice(start,end).entries()){
+    if(!harmonicRunsAt(state,start+offset).length)emptyBars++;
+    for(const {chord} of harmonicRunsAt(state,start+offset))if(!CHORDS[chord].some(p=>intervals.includes(p%12)))unmatched.add(chord);
   }
   return {emptyBars,unmatchedChords:[...unmatched]};
 }
@@ -64,7 +64,7 @@ export function generateMelody(value,start,settings={}) {
   const anchor=options.mode==='answer'?nearestIndex(allowed,prefix.at(-1).pitch):anchorIndex;
   let previous=options.mode==='answer'?prefix.at(-1).pitch:null;
   for(let bar=target.start;bar<target.end;bar++){
-    const runs=harmonicRuns(state.tracks[1].bars[bar]);
+    const runs=harmonicRunsAt(state,bar);
     let rhythm=options.mode==='repitch'?original.filter(n=>n.bar===bar).map(n=>[n.step,track.durations[bar][n.step]]):style.rhythms[options.density][(bar-start+options.variant)%2];
     if(options.mode!=='repitch'&&bar===target.end-1)rhythm=[...rhythm.filter(([step])=>step<12),[12,4]];
     if(options.mode!=='repitch')for(const field of ['bars','durations','velocities'])track[field][bar].fill(field==='bars'?-1:1);

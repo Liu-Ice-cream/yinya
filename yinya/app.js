@@ -4,7 +4,7 @@ import { audioSong } from './song.js';
 import { VOICES, voiceInfo, CHORD_VOICES, chordVoiceInfo, BASS_VOICES, bassVoiceInfo } from './voices.js';
 import { TRACKS, PRESETS, GROUP_SIZE, BAR_COUNTS, NOTE_LENGTHS, MAX_BACKUP_BYTES, parseBackup, LONG_NOTE_TRACKS, CHORD_STYLES, chordStyleInfo, VELOCITIES, sectionChordStyle, setSectionChordStyle, setNoteVelocity, applyDrumPattern, setScale, setTranspose, shiftOctave, applyProgression, renameSection, setSectionTrack, insertSection, moveSection, deleteSection, trackAudibleAt, hasAudibleNotes, blank, preset, validate, resize, rangeHasNotes, copyGroup, copyBar, clearBar, pitchedNoteAt, setPitchedNote, removePitchedNote, encode, decode, songJSON, wavBuffer } from './model.js';
 import { PITCH_VALUES, SCALES, PROGRESSIONS, scaleInfo, inScale, keyName, pitchName, chordName, pitchRows, chordRows } from './theory.js';
-import { BASS_PATTERNS, ACCOMPANIMENT_STYLES, bassPatternInfo, accompanimentStyleInfo, generateAccompaniment, harmonicRuns } from './accompaniment.js';
+import { BASS_PATTERNS, ACCOMPANIMENT_STYLES, bassPatternInfo, accompanimentStyleInfo, generateAccompaniment, harmonicRunsAt } from './accompaniment.js';
 import { MELODY_STYLES, MELODY_DENSITIES, melodyStyleInfo, melodyTarget, melodyHarmonyInfo, generateMelody } from './melody.js';
 import { DRUM_PATTERNS } from './grooves.js';
 import { PreviewPlayer } from './preview.js';
@@ -17,14 +17,14 @@ import {DRUM_KITS,drumKitInfo,drumLevel} from './drum-kits.js';
 import {sectionDrumKit,setSectionDrumKit,setDrumHit} from './model.js';
 import {DrumEditor} from './drum-editor.js';
 import {DrumWorkshop} from './drum-workshop.js';
-import {setChord,CHORDS} from './model.js';
+import {setChord,chordAt,CHORDS} from './model.js';
 import {chordInversion,chordVelocity,INVERSION_NAMES,voicedName} from './chord-expression.js';
 import {HarmonyEditor} from './harmony-editor.js';
 import {HarmonyWorkshop} from './harmony-workshop.js';
 
 const $ = id => document.getElementById(id);
-const KEYS = { draft: 'yinya.v15.draft', library: 'yinya.v15.library', preferences: 'yinya.v1.preferences' };
-const LEGACY_KEYS = [{draft:"yinya.v14.draft",library:"yinya.v14.library"}, {draft:"yinya.v13.draft",library:"yinya.v13.library"}, {draft:"yinya.v12.draft",library:"yinya.v12.library"}, {draft:"yinya.v11.draft",library:"yinya.v11.library"}, {draft:"yinya.v10.draft",library:"yinya.v10.library"}, {draft:'yinya.v9.draft',library:'yinya.v9.library'}, { draft:'yinya.v8.draft',library:'yinya.v8.library' }, { draft: 'yinya.v7.draft', library: 'yinya.v7.library' }, { draft: 'yinya.v6.draft', library: 'yinya.v6.library' }, { draft: 'yinya.v5.draft', library: 'yinya.v5.library' }, { draft: 'yinya.v4.draft', library: 'yinya.v4.library' }, { draft: 'yinya.v3.draft', library: 'yinya.v3.library' }, { draft: 'yinya.v2.draft', library: 'yinya.v2.library' }, { draft: 'yinya.v1.draft', library: 'yinya.v1.library' }];
+const KEYS = { draft: 'yinya.v16.draft', library: 'yinya.v16.library', preferences: 'yinya.v1.preferences' };
+const LEGACY_KEYS = [{draft:"yinya.v15.draft",library:"yinya.v15.library"}, {draft:"yinya.v14.draft",library:"yinya.v14.library"}, {draft:"yinya.v13.draft",library:"yinya.v13.library"}, {draft:"yinya.v12.draft",library:"yinya.v12.library"}, {draft:"yinya.v11.draft",library:"yinya.v11.library"}, {draft:"yinya.v10.draft",library:"yinya.v10.library"}, {draft:'yinya.v9.draft',library:'yinya.v9.library'}, { draft:'yinya.v8.draft',library:'yinya.v8.library' }, { draft: 'yinya.v7.draft', library: 'yinya.v7.library' }, { draft: 'yinya.v6.draft', library: 'yinya.v6.library' }, { draft: 'yinya.v5.draft', library: 'yinya.v5.library' }, { draft: 'yinya.v4.draft', library: 'yinya.v4.library' }, { draft: 'yinya.v3.draft', library: 'yinya.v3.library' }, { draft: 'yinya.v2.draft', library: 'yinya.v2.library' }, { draft: 'yinya.v1.draft', library: 'yinya.v1.library' }];
 const clone = value => JSON.parse(JSON.stringify(value));
 const history = [], future = [];
 let state = preset('sprout'), activeId = null, selectedTrack = 0, library = [], storageWarning = '', exporting = false;
@@ -33,7 +33,7 @@ let exportJob = null;
 let pendingConfirmation = null;
 let workshopSession = null, workshopPreview = null;
 let melodySession = null, melodyPreview = null;
-let selectedNote = null, selectedChord=null, harmonyEditor=null, newChordInversion=0, newChordVelocity=1;
+let selectedNote = null, selectedChord=null, harmonyEditor=null, newChordInversion=0, newChordVelocity=1, newChordDuration=1;
 let phraseEditor = null, drumEditor = null, editorView = 'bar', newDrumVelocity=1;
 function isDrumView(){return editorView==='phrase'&&selectedTrack===3;}
 function isHarmonyView(){return editorView==='phrase'&&selectedTrack===1;}
@@ -185,7 +185,7 @@ function renderControls() {
   if(isPhraseView())$('grid-tip').textContent='拖动或使用按钮调整乐句；重叠和越界会整次取消，音符仍可一次撤销。';
   if(isDrumView())$('grid-tip').textContent='点空格写鼓点，点色块选中；支持框选、复制、批量移动和独立力度。';
   if(selectedTrack===1)$('grid-tip').textContent='点已有和弦选中，调整转位、力度或删除；方向键移动焦点。';
-  if(isHarmonyView())$('grid-tip').textContent='每拍一组和弦；转位与力度逐拍保存，复制和批量编辑可一次撤销。';
+  if(isHarmonyView())$('grid-tip').textContent='和弦持续 1–4 拍，可跨小节；拖右侧手柄或设置时长，批量编辑可一次撤销。';
   phraseEditor?.update();drumEditor?.update();harmonyEditor?.update();
 }
 function phraseModeLabel() { return phraseMode === 'duet' ? '旋律＋和弦' : '仅旋律'; }
@@ -217,13 +217,13 @@ function renderNoteControls() {
   $('note-selection').textContent = note ? `已选：第 ${note.start + 1} 步 · ${pitchName(state,selectedTrack,note.pitch,pitchNaming)} · ${duration} 格` : `新音符：${newNoteLengths[selectedTrack]} 格`;
   $('delete-note').disabled = !note; $('deselect-note').disabled = !note;
 }
-function currentChord(){if(!selectedChord||selectedTrack!==1||selectedChord.bar!==follower.selectedBar)return null;const chord=state.tracks[1].bars[selectedChord.bar][selectedChord.beat];if(chord<0){selectedChord=null;return null;}const code=state.tracks[1].chordVoicings[selectedChord.bar][selectedChord.beat];return {...selectedChord,chord,inversion:chordInversion(code),velocity:chordVelocity(code)};}
+function currentChord(){if(!selectedChord||selectedTrack!==1||selectedChord.bar!==follower.selectedBar)return null;const chord=state.tracks[1].bars[selectedChord.bar][selectedChord.beat];if(chord<0){selectedChord=null;return null;}const code=state.tracks[1].chordVoicings[selectedChord.bar][selectedChord.beat];return {...selectedChord,chord,inversion:chordInversion(code),velocity:chordVelocity(code),duration:state.tracks[1].chordDurations[selectedChord.bar][selectedChord.beat]};}
 function renderChordControls(){
   $('chord-note-tools').hidden=selectedTrack!==1||isHarmonyView();if(selectedTrack!==1)return;
-  const n=currentChord();$('chord-inversion').value=n?n.inversion:newChordInversion;$('chord-velocity').value=n?n.velocity:newChordVelocity;
+  const n=currentChord();$('chord-duration').value=n?n.duration:newChordDuration;$('chord-duration').disabled=exporting;$('chord-inversion').value=n?n.inversion:newChordInversion;$('chord-velocity').value=n?n.velocity:newChordVelocity;
   for(const o of $('chord-inversion').options)o.disabled=Boolean(n&&Number(o.value)>=CHORDS[n.chord].length);
   $('chord-inversion').disabled=$('chord-velocity').disabled=exporting;$('delete-chord').disabled=$('deselect-chord').disabled=!n||exporting;
-  $('chord-note-selection').textContent=n?`已选第 ${n.beat+1} 拍 · ${voicedName(state,n.chord,n.inversion)} · ${INVERSION_NAMES[n.inversion]} · ${VELOCITIES[n.velocity].name}`:`新和弦：${INVERSION_NAMES[newChordInversion]} · ${VELOCITIES[newChordVelocity].name}`;
+  $('chord-note-selection').textContent=n?`已选第 ${n.beat+1} 拍 · ${voicedName(state,n.chord,n.inversion)} · ${INVERSION_NAMES[n.inversion]} · ${VELOCITIES[n.velocity].name} · ${n.duration} 拍`:`新和弦：${INVERSION_NAMES[newChordInversion]} · ${VELOCITIES[newChordVelocity].name} · ${newChordDuration} 拍`;
 }
 function auditionChordAt(bar,beat,message){
   if(message)status(message);const id=state.tracks[1].bars[bar][beat];if(id<0||synth.playing||!clickPreview||exporting)return;
@@ -278,7 +278,7 @@ function editCell(row, col) {
     $('grid').querySelector(`[data-row="${row}"][data-col="${col}"]`)?.focus({ preventScroll: true });
     auditionNote(`已添加 ${result.duration} 格${TRACKS[selectedTrack].name}音符${result.limited ? '；遇到后音或四小节段末尾，已自动收短' : ''}。`); return;
   }
-  if(selectedTrack===1){const bar=follower.selectedBar;if(state.tracks[1].bars[bar][col]===choice.id){selectedChord={bar,beat:col};preview.stop();renderGrid();renderChordControls();syncPlayback();auditionChordAt(bar,col,'已选本拍和弦，可调整转位、力度或删除。');return;}try{const next=setChord(state,bar,col,choice.id,newChordInversion,newChordVelocity);selectedChord={bar,beat:col};commit(next);auditionChordAt(bar,col,'和弦已写入，可继续调整转位与力度。');}catch(error){status(error.message+'；作品未改变。');}return;}
+  if(selectedTrack===1){const held=chordAt(state,follower.selectedBar,col);if(held&&held.chord===choice.id&&held.bar!==follower.selectedBar){selectBar(held.bar);selectedChord={bar:held.bar,beat:held.beat};renderGrid();renderChordControls();auditionChordAt(held.bar,held.beat);return;}const bar=follower.selectedBar,at=held&&held.chord===choice.id?held.beat:col;if(held&&held.chord===choice.id){selectedChord={bar,beat:at};preview.stop();renderGrid();renderChordControls();syncPlayback();auditionChordAt(bar,at,'已选本拍和弦，可调整转位、力度或删除。');return;}try{const next=setChord(state,bar,col,choice.id,newChordInversion,newChordVelocity,newChordDuration);selectedChord={bar,beat:col};commit(next);auditionChordAt(bar,col,'和弦已写入，可继续调整转位与力度。');}catch(error){status(error.message+'；作品未改变。');}return;}
   let next = clone(state);const t = next.tracks[selectedTrack], bar = t.bars[follower.selectedBar];
   let added;
   if (t.id === 'drums') {added=!(bar[col]&(1<<(2-row)));next=setDrumHit(state,follower.selectedBar,col,2-row,added,newDrumVelocity);}
@@ -308,9 +308,10 @@ function renderGrid() {
       const b = button('', () => editCell(row, col), 'cell' + (col % 4 === 0 ? ' beat' : ''));
       b.dataset.row = row; b.dataset.col = col;
       const held = LONG_NOTE_TRACKS.includes(selectedTrack) ? pitchedNoteAt(state, selectedTrack, follower.selectedBar, col) : null;
-      const on = held ? held.pitch === rows[row].id : t.id === 'drums' ? Boolean(bar[col] & (1 << (2 - row))) : bar[col] === rows[row].id;
+      const harmony=selectedTrack===1?chordAt(state,follower.selectedBar,col):null;
+      const on = harmony?harmony.chord===rows[row].id:held ? held.pitch === rows[row].id : t.id === 'drums' ? Boolean(bar[col] & (1 << (2 - row))) : bar[col] === rows[row].id;
       b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', `${rows[row].label}，第${col + 1}${t.id === 'chords' ? '拍' : '步'}`);
-      if(on&&selectedTrack===1){const code=state.tracks[1].chordVoicings[follower.selectedBar][col],inv=chordInversion(code),level=chordVelocity(code);b.classList.add(`velocity-${level}`);b.classList.toggle('chord-selected',currentChord()?.beat===col);b.title=`${INVERSION_NAMES[inv]} · ${VELOCITIES[level].name}`;b.textContent=inv?String(inv):'•';b.setAttribute('aria-label',`${voicedName(state,rows[row].id,inv)}，第 ${col+1} 拍，${INVERSION_NAMES[inv]}，力度${VELOCITIES[level].name}，点按选中`);}
+      if(on&&selectedTrack===1){const code=harmony.expression,inv=chordInversion(code),level=chordVelocity(code);b.classList.add(`velocity-${level}`);b.classList.toggle('chord-selected',currentChord()?.beat===col);b.title=`${INVERSION_NAMES[inv]} · ${VELOCITIES[level].name}`;b.textContent=harmony.bar!==follower.selectedBar||harmony.beat!==col?'—':inv?String(inv):'•';b.title+=` · ${harmony.duration} 拍`; b.setAttribute('aria-label',`${voicedName(state,rows[row].id,inv)}，第 ${col+1} 拍，${INVERSION_NAMES[inv]}，力度${VELOCITIES[level].name}，持续 ${harmony.duration} 拍，${harmony.bar!==follower.selectedBar||harmony.beat!==col?'延音，点按回到起点':'点按选中'}`);}
       if(on&&selectedTrack===3){const level=drumLevel(state.tracks[3].drumVelocities[follower.selectedBar][col],2-row);b.classList.add(`velocity-${level}`);b.title=`力度：${VELOCITIES[level].name}`;b.setAttribute('aria-label',`${rows[row].label}，第${col+1}步，力度${VELOCITIES[level].name}，再点移除`);}
       if (on && held) {
         b.dataset.noteStart = held.start;
@@ -323,7 +324,7 @@ function renderGrid() {
         b.setAttribute('aria-label', `${rows[row].label}，第${col + 1}步，${col === localStart ? '音符起点' : '延音'}，持续 ${held.duration} 格，力度${VELOCITIES[velocity].name}，${held.bar!==undefined?'点按回到起点并选中完整音符':'点按选中'}`);
       }
       b.addEventListener('keydown', e => {
-        if(selectedTrack===1&&['Delete','Backspace'].includes(e.key)){e.preventDefault();if(state.tracks[1].bars[follower.selectedBar][col]===rows[row].id){selectedChord=null;commit(setChord(state,follower.selectedBar,col,-1),'和弦已删除；可撤销。');}return;}
+        if(selectedTrack===1&&['Delete','Backspace'].includes(e.key)){e.preventDefault();const n=chordAt(state,follower.selectedBar,col);if(n&&n.chord===rows[row].id){selectedChord=null;commit(setChord(state,n.bar,n.beat,-1),'和弦已删除；可撤销。');}return;}
         if (LONG_NOTE_TRACKS.includes(selectedTrack) && ['Delete', 'Backspace'].includes(e.key)) {
           e.preventDefault(); const note = pitchedNoteAt(state, selectedTrack, follower.selectedBar, col);
           if (note && note.pitch === rows[row].id) { selectedNote = null; selectedChord=null; commit(removePitchedNote(state, selectedTrack, follower.selectedBar, col), `${TRACKS[selectedTrack].name}音符已删除；撤销可以恢复。`); }
@@ -584,7 +585,7 @@ $('open-drums').addEventListener('click',()=>{if(!exporting)drumWorkshop.open(Ma
 harmonyEditor=new HarmonyEditor($('harmony-editor'),{get:()=>{const start=Math.floor(follower.selectedBar/4)*4;return {state,start,active:isHarmonyView(),disabled:exporting,auditioning:orchestrationActive,canAudition:hasAudibleNotes(state,start,start+4)};},beforeEdit:stop,status,commit:(next,message)=>{selectedChord=null;commit(next,message);},audition:()=>$('preview-section').click(),auditionChord:beat=>{const start=Math.floor(follower.selectedBar/4)*4;auditionChordAt(start+Math.floor(beat/4),beat%4);}});
 const harmonyWorkshop=new HarmonyWorkshop($('harmony-dialog'),{get:()=>state,beforeEdit:stop,preview,commit:(next,message)=>{selectedChord=null;commit(next,message);}});
 $('open-harmony').addEventListener('click',()=>{if(!exporting)harmonyWorkshop.open(Math.floor(follower.selectedBar/4));});
-for(const kind of ['inversion','velocity'])$('chord-'+kind).addEventListener('change',e=>{const value=Number(e.target.value),note=currentChord();if(kind==='inversion')newChordInversion=value;else newChordVelocity=value;if(!note){preview.stop();renderChordControls();return;}try{const next=setChord(state,note.bar,note.beat,note.chord,kind==='inversion'?value:note.inversion,kind==='velocity'?value:note.velocity);commit(next);auditionChordAt(note.bar,note.beat,'本拍转位与力度已更新；可撤销。');}catch(error){renderChordControls();status(error.message);}});
+for(const kind of ['inversion','velocity','duration'])$('chord-'+kind).addEventListener('change',e=>{const value=Number(e.target.value),note=currentChord();if(kind==='inversion')newChordInversion=value;else if(kind==='velocity')newChordVelocity=value;else newChordDuration=value;if(!note){preview.stop();renderChordControls();return;}try{const next=setChord(state,note.bar,note.beat,note.chord,kind==='inversion'?value:note.inversion,kind==='velocity'?value:note.velocity,kind==='duration'?value:note.duration);commit(next);auditionChordAt(note.bar,note.beat,'和弦时长、转位与力度已更新；可撤销。');}catch(error){renderChordControls();status(error.message);}});
 $('deselect-chord').addEventListener('click',()=>{preview.stop();selectedChord=null;renderChordControls();renderGrid();});
 $('delete-chord').addEventListener('click',()=>{const n=currentChord();if(!n)return;selectedChord=null;commit(setChord(state,n.bar,n.beat,-1),'本拍和弦已删除；可撤销。');});
 const dynamicEditor=new DynamicEditor($('dynamic-dialog'),{get:()=>state,beforeEdit:stop,preview,commit:(next,message)=>{selectedNote=null;selectedChord=null;commit(next,message);}});
@@ -787,7 +788,7 @@ function updateWorkshop() {
     const warnings = [];
     const muted = options.targets.flatMap((chosen, index) => chosen && !trackAudibleAt(next, index + 1, session.start) ? [TRACKS[index + 1].name] : []);
     if (muted.length) warnings.push(`${muted.join('、')}当前静音：请检查整曲开关、音量及本段开关。`);
-    if (options.targets[1]) { const silent = next.tracks[1].bars.slice(session.start, session.start + GROUP_SIZE).filter(bar => !harmonicRuns(bar).length).length; if (silent) warnings.push(`${silent} 个空白和弦小节的贝斯将留白。`); }
+    if (options.targets[1]) { const silent = next.tracks[1].bars.slice(session.start, session.start + GROUP_SIZE).filter((bar,i) => !harmonicRunsAt(next,session.start+i).length).length; if (silent) warnings.push(`${silent} 个空白和弦小节的贝斯将留白。`); }
     $('workshop-warning').textContent = warnings.join(' ');
     const same = JSON.stringify(next) === session.serialized;
     $('workshop-apply').disabled = same;

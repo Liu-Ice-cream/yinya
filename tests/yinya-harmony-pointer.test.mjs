@@ -13,7 +13,17 @@ function harness(){
   return {e,original,state:()=>state,change:next=>{state=next;},event,elements,classes};
 }
 test('harmony drag only previews until release, commits once and preserves identity, inversion and velocity',()=>{
-  const h=harness(),e=h.e;e.pointerdown(h.event(0));e.pointermove(h.event(1));assert.equal(e.commits.length,0);assert.deepEqual(h.state(),h.original);assert.ok(h.classes.has('dragging'));e.pointerup(h.event(1));assert.equal(e.commits.length,1);assert.deepEqual(harmonyNotes(h.state(),0)[0],{beat:1,chord:7,inversion:3,velocity:0});assert.ok(!h.classes.has('dragging'));
+  const h=harness(),e=h.e;e.pointerdown(h.event(0));e.pointermove(h.event(1));assert.equal(e.commits.length,0);assert.deepEqual(h.state(),h.original);assert.ok(h.classes.has('dragging'));e.pointerup(h.event(1));assert.equal(e.commits.length,1);assert.deepEqual(harmonyNotes(h.state(),0)[0],{beat:1,chord:7,inversion:3,velocity:0,duration:1});assert.ok(!h.classes.has('dragging'));
+});
+
+test('a right-handle resize previews then commits one duration, preserving expression and rejecting collision',()=>{
+ const h=harness(),e=h.e,handle=beat=>{const event=h.event(beat);event.target.closest=selector=>selector==='[data-beat]'?event.target:selector==='.harmony-resize'?{}:null;return event;};
+ e.pointerdown(handle(0));e.pointermove(h.event(1));assert.equal(e.commits.length,0);e.pointerup(h.event(1));assert.equal(e.commits.length,1);assert.equal(harmonyNotes(h.state(),0)[0].duration,2);assert.equal(harmonyNotes(h.state(),0)[0].inversion,3);
+ e.pointerdown(handle(1));e.pointermove(h.event(2));assert.ok(h.classes.has('invalid'));e.pointerup(h.event(2));assert.equal(e.commits.length,1);assert.match(e.messages.at(-1),/重叠/);
+});
+test('duration buttons work without pointer capture and a resize cancel leaves no history entry',()=>{
+ const h=harness(),e=h.e;e.duration=2;e.action('duration');assert.equal(e.commits.length,1);assert.equal(harmonyNotes(h.state(),0)[0].duration,2);
+ const down=h.event(1);down.target.closest=selector=>selector==='[data-beat]'?down.target:selector==='.harmony-resize'?{}:null;e.pointerdown(down);e.pointermove(h.event(0));e.cancelGesture();e.pointerup(h.event(0));assert.equal(e.commits.length,1);assert.equal(harmonyNotes(h.state(),0)[0].duration,2);
 });
 test('captured clicks select once or insert once and suppress synthetic follow-up events without blocking rapid real clicks',()=>{
   const h=harness(),e=h.e;e.pointerdown(h.event(0));e.pointerup(h.event(0));assert.deepEqual([...e.selection],[0]);assert.equal(e.inversion,3);e.pointerdown(h.event(1));e.pointerup(h.event(1));assert.equal(e.commits.length,1);e.click(h.event(1));assert.equal(e.commits.length,1);e.pointerdown(h.event(3));e.pointerup(h.event(3));assert.equal(e.commits.length,2);

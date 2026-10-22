@@ -1,5 +1,5 @@
 // Deterministic, editable accompaniment. No persistent recipe or external service.
-import { validate, GROUP_SIZE, CHORDS, applyProgression, setSectionChordStyle, applyDrumPattern } from './model.js';
+import { validate, GROUP_SIZE, CHORDS, chordAt, applyProgression, setSectionChordStyle, applyDrumPattern } from './model.js';
 import { pitchId } from './theory.js';
 
 export const BASS_PATTERNS = Object.freeze([
@@ -50,15 +50,25 @@ export function harmonicRuns(bar) {
   }
   return runs;
 }
+// Old one-beat accompaniment keeps its inferred harmony; explicit long chords
+// carry their harmony across bar lines and end at their saved duration.
+export function harmonicRunsAt(state,bar){
+  const t=state.tracks[1],incoming=chordAt(state,bar,0);
+  if((!incoming||incoming.bar===bar)&&t.chordDurations[bar].every(n=>n===1))return harmonicRuns(t.bars[bar]);
+  const runs=[];
+  if(incoming&&incoming.bar<bar)runs.push({chord:incoming.chord,start:0,end:Math.min(16,(incoming.bar*4+incoming.beat+incoming.duration-bar*4)*4)});
+  for(let beat=0;beat<4;beat++)if(t.bars[bar][beat]>=0){const duration=t.chordDurations[bar][beat],next=t.bars[bar].findIndex((n,i)=>i>beat&&n>=0);runs.push({chord:t.bars[bar][beat],start:beat*4,end:duration>1?Math.min(16,(beat+duration)*4):(next<0?16:next*4)});}
+  return runs;
+}
 function alternateInterval(chord) {
   const pitches = CHORDS[chord], root = pitches[0] % 12, intervals = new Set(pitches.map(p => (p - root + 120) % 12));
   // Diminished and suspended chords use their own tones; legacy Em7 has no fifth.
   return [7, 6, 5, 3, 4, 2, 10, 11, 8, 9, 1].find(interval => intervals.has(interval)) ?? 0;
 }
-export function bassBar(chords, patternId) {
+export function bassBar(chords, patternId, runs=null) {
   bassPatternInfo(patternId);
   const result = { bars: Array(16).fill(-1), durations: Array(16).fill(1), velocities: Array(16).fill(1) };
-  for (const run of harmonicRuns(chords)) {
+  for (const run of runs??harmonicRuns(chords)) {
     const root = CHORDS[run.chord][0] % 12;
     const size = patternId === 'steady-v1' ? 8 : patternId === 'alternate-v1' ? 4 : 2;
     for (let step = run.start, count = 0; step < run.end; step += size, count++) {
@@ -80,7 +90,7 @@ export function generateAccompaniment(value, start, settings = {}) {
   }
   if ((options.targets[0] || options.targets[1]) && !state.tracks[1].bars.slice(start, start + GROUP_SIZE).some(bar => bar.some(n => n >= 0))) throw new Error('本段没有和弦：请先填入和弦，或在成套伴奏中选择「采用风格走向」并勾选和弦。');
   if (options.targets[1]) for (let bar = start; bar < start + GROUP_SIZE; bar++) {
-    const generated = bassBar(state.tracks[1].bars[bar], options.bassPattern);
+    const generated = bassBar(state.tracks[1].bars[bar], options.bassPattern, harmonicRunsAt(state,bar));
     for (const field of ['bars', 'durations', 'velocities']) state.tracks[2][field][bar] = generated[field];
   }
   if (options.targets[2]) state = applyDrumPattern(state, start, GROUP_SIZE, style.drums, true);

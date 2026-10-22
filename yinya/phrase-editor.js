@@ -2,6 +2,7 @@ import {phraseNotes,editPhrase,copyPhrase,pastePhrase,phraseRectangle} from './p
 import {PITCH_VALUES,pitchRows,pitchName,chordName} from './theory.js';
 import {VELOCITIES} from './model.js';
 
+import {harmonicRunsAt} from './accompaniment.js';
 const LABEL=72,ROW=24,HEADER=58;
 const move=(steps,semitones=0)=>({type:'move',steps,semitones});
 export class PhraseEditor {
@@ -56,7 +57,7 @@ export class PhraseEditor {
     for(let bar=0;bar<4;bar++){
       const label=document.createElement('span');label.textContent=`第 ${this.ctx.start+bar+1} 小节`;bars.append(label);
       let chord=-1;
-      for(let beat=0;beat<4;beat++){const id=this.ctx.state.tracks[1].bars[this.ctx.start+bar][beat];if(id>=0)chord=id;const cell=document.createElement('span');cell.textContent=chord<0?'—':chordName(this.ctx.state,chord);cell.title=`第 ${this.ctx.start+bar+1} 小节第 ${beat+1} 拍：${chord<0?'无和弦':chordName(this.ctx.state,chord)}${id<0&&chord>=0?'（沿用本小节和声）':''}`;harmony.append(cell);}
+      for(let beat=0;beat<4;beat++){const id=this.ctx.state.tracks[1].bars[this.ctx.start+bar][beat];chord=harmonicRunsAt(this.ctx.state,this.ctx.start+bar).find(n=>beat*4>=n.start&&beat*4<n.end)?.chord??-1;const cell=document.createElement('span');cell.textContent=chord<0?'—':chordName(this.ctx.state,chord);cell.title=`第 ${this.ctx.start+bar+1} 小节第 ${beat+1} 拍：${chord<0?'无和弦':chordName(this.ctx.state,chord)}${id<0&&chord>=0?'（延续和声）':''}`;harmony.append(cell);}
     }
     this.$('roll-rows').replaceChildren(...this.rows.map(row=>{const line=document.createElement('div');line.className='roll-row'+(row.outside?' outside-scale':'');const label=document.createElement('span');label.className='roll-pitch';label.textContent=row.label;label.title=row.outside?'已有音阶外音，保持可编辑':row.label;line.append(label);return line;}));
     this.drawNotes();this.drawCursor();
