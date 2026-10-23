@@ -6,7 +6,7 @@ import { TRACKS, CHORDS, GROUP_SIZE, songJSON, validate, pitchedNoteAt, LONG_NOT
 import {voicedPitches,chordInversion} from './chord-expression.js';
 import {drumReleaseSeconds} from './drum-kits.js';
 import { releaseSeconds, voiceInfo, chordReleaseSeconds, chordVoiceInfo, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
-import { AudioRenderer, phraseState, sectionState, fadeEnd } from './render.js';
+import { AudioRenderer, phraseState, sectionState, combinationState, fadeEnd } from './render.js';
 
 export const PREVIEW_SECONDS = .32;
 const HOLD_SECONDS = .25;
@@ -167,6 +167,10 @@ export class PreviewPlayer {
   }
   playSection(value, start, changed = () => {}) {
     return this.playSnapshot(() => sectionState(value, start), changed, [0, 1, 2, 3]);
+  }
+  playCombination(value,start,indices,changed=()=>{}){
+    const chosen=Array.isArray(indices)?[...indices]:indices;
+    return this.playSnapshot(()=>combinationState(value,start,chosen),changed,chosen);
   }
   async playSnapshot(makeState, changed, indices) {
     this.stop(); const generation = this.generation, state = makeState();

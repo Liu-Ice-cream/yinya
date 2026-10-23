@@ -26,6 +26,12 @@ export function phraseState(value, start, mode = 'melody') {
   state.tracks.forEach((track, index) => { track.enabled = (index === 0 || (mode === 'duet' && index === 1)) && track.enabled; });
   return state;
 }
+export function combinationState(value,start,indices){
+  if(!Array.isArray(indices)||!indices.length||indices.length>4||new Set(indices).size!==indices.length||Array.from(indices).some(i=>!Number.isInteger(i)||i<0||i>3))throw new Error('请选择有效的试听声部组合');
+  const state=sectionState(value,start);
+  state.tracks.forEach((track,index)=>{track.enabled=indices.includes(index)&&track.enabled;});
+  return state;
+}
 export function fadeEnd(left, right, count) {
   const start = Math.max(0, left.length - count), length = left.length - start;
   for (let i = 0; i < length; i++) { const gain = (length - 1 - i) / Math.max(1, length - 1); left[start + i] *= gain; right[start + i] *= gain; }
