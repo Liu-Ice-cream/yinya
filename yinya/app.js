@@ -22,6 +22,7 @@ import {chordInversion,chordVelocity,INVERSION_NAMES,voicedName} from './chord-e
 import {HarmonyEditor} from './harmony-editor.js';
 import {HarmonyWorkshop} from './harmony-workshop.js';
 import {ArrangerBoard} from './arranger-board.js';
+import {VariationWorkshop} from './variation-workshop.js';
 
 const $ = id => document.getElementById(id);
 const KEYS = { draft: 'yinya.v16.draft', library: 'yinya.v16.library', preferences: 'yinya.v1.preferences' };
@@ -47,6 +48,7 @@ function gridRows() { return selectedTrack === 3 ? TRACKS[3].rows.map((label,id)
 let phraseActive = false, transportRange = null, wasPlaying = false;
 let orchestrationActive = false;
 let arrangerBoard=null;
+let variationWorkshop=null;
 const preview = new PreviewPlayer();
 
 function read(key) {
@@ -114,6 +116,7 @@ function commit(next, message, id = activeId) {
   const clean = validate(next);
   if (workshopSession) closeWorkshop();
   if (melodySession) closeMelodyWorkshop();
+  if (variationWorkshop?.session) variationWorkshop.close();
   preview.stop();
   history.push(snapshot()); if (history.length > 100) history.shift(); future.length = 0;
   state = clean; activeId = id;
@@ -154,7 +157,7 @@ function renderControls() {
   const t = TRACKS[selectedTrack], layer = state.tracks[selectedTrack];
   $('editor-view-label').hidden = false; $('editor-view').value=editorView; $('editor-view').disabled=exporting;
   renderTheoryControls();
-  $('open-harmony').disabled = $('open-drums').disabled = $('open-dynamics').disabled = $('open-workshop').disabled = $('open-melody').disabled = exporting;
+  $('open-variation').disabled = $('open-harmony').disabled = $('open-drums').disabled = $('open-dynamics').disabled = $('open-workshop').disabled = $('open-melody').disabled = exporting;
   $('title').value = state.title; $('tempo').value = state.tempo;
   $('bar-count').value = state.barCount;
   $('length-fill').disabled = state.barCount === 32;
@@ -593,6 +596,8 @@ $('deselect-chord').addEventListener('click',()=>{preview.stop();selectedChord=n
 $('delete-chord').addEventListener('click',()=>{const n=currentChord();if(!n)return;selectedChord=null;commit(setChord(state,n.bar,n.beat,-1),'本拍和弦已删除；可撤销。');});
 const dynamicEditor=new DynamicEditor($('dynamic-dialog'),{get:()=>state,beforeEdit:stop,preview,commit:(next,message)=>{selectedNote=null;selectedChord=null;commit(next,message);}});
 $('open-dynamics').addEventListener('click',()=>{if(!exporting)dynamicEditor.open(Math.floor(follower.selectedBar/GROUP_SIZE));});
+variationWorkshop=new VariationWorkshop($('variation-dialog'),{get:()=>state,disabled:()=>exporting,beforeEdit:stop,preview,confirm:confirmChange,commit:(next,message,index)=>{selectedNote=null;selectedChord=null;selectedTrack=0;editorView='phrase';pitchRange='all';follower.select(index*4);commit(next,message);savePreferences(message);}});
+$('open-variation').addEventListener('click',()=>variationWorkshop.open(Math.floor(follower.selectedBar/4)));
 arrangerBoard=new ArrangerBoard($('arranger-board'),{
   get:()=>({state,index:Math.floor(follower.selectedBar/4),track:selectedTrack,disabled:exporting,playing:synth.playing}),preview,status,beforeEdit:stop,confirm:confirmChange,previewEnded:syncPlayback,
   open:(index,track)=>{if(exporting)return;stop();selectedNote=null;selectedChord=null;selectedTrack=track;editorView='phrase';follower.select(index*4);render();savePreferences(`正在编辑「${state.sections[index].name}」的${TRACKS[track].name}，第 ${index*4+1}–${index*4+4} 小节。`);$('track-name').focus({preventScroll:true});$('track-name').scrollIntoView({block:'start'});},
