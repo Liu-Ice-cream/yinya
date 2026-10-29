@@ -6,7 +6,7 @@ import { TRACKS, CHORDS, GROUP_SIZE, songJSON, validate, pitchedNoteAt, LONG_NOT
 import {voicedPitches,chordInversion} from './chord-expression.js';
 import {drumReleaseSeconds} from './drum-kits.js';
 import { releaseSeconds, voiceInfo, chordReleaseSeconds, chordVoiceInfo, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
-import { AudioRenderer, phraseState, sectionState, combinationState, fadeEnd } from './render.js';
+import { AudioRenderer, phraseState, sectionState, rangeState, combinationState, fadeEnd } from './render.js';
 
 export const PREVIEW_SECONDS = .32;
 const HOLD_SECONDS = .25;
@@ -168,13 +168,16 @@ export class PreviewPlayer {
   playSection(value, start, changed = () => {}) {
     return this.playSnapshot(() => sectionState(value, start), changed, [0, 1, 2, 3]);
   }
+  playRange(value,start,count,changed=()=>{}){
+    return this.playSnapshot(()=>rangeState(value,start,count),changed,[0,1,2,3]);
+  }
   playCombination(value,start,indices,changed=()=>{}){
     const chosen=Array.isArray(indices)?[...indices]:indices;
     return this.playSnapshot(()=>combinationState(value,start,chosen),changed,chosen);
   }
   async playSnapshot(makeState, changed, indices) {
     this.stop(); const generation = this.generation, state = makeState();
-    if (!hasAudibleNotes(state, 0, GROUP_SIZE, indices)) return false;
+    if (!hasAudibleNotes(state, 0, state.barCount, indices)) return false;
     this.phraseChanged = changed; changed(true);
     try {
       const context = this.context || (this.context = this.createContext());

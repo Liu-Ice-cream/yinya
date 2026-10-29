@@ -5,21 +5,22 @@ import { validate, songJSON, GROUP_SIZE, trackAudibleAt, sectionVoice, sectionDr
 import {drumReleaseSeconds} from './drum-kits.js';
 import { voiceInfo, releaseSeconds, chordVoiceInfo, chordReleaseSeconds, bassVoiceInfo, bassReleaseSeconds } from './voices.js';
 
-export function sectionState(value, start) {
+export function rangeState(value, start, count) {
   const state = validate(value);
-  if (!Number.isInteger(start) || start < 0 || start % GROUP_SIZE || start + GROUP_SIZE > state.barCount) throw new Error('试听段落无效');
-  state.sections = state.sections.slice(start / GROUP_SIZE, start / GROUP_SIZE + 1);
-  state.barCount = GROUP_SIZE;
+  if (!Number.isInteger(start) || start < 0 || start % GROUP_SIZE || !Number.isInteger(count) || count < GROUP_SIZE || count % GROUP_SIZE || start + count > state.barCount) throw new Error('试听段落无效');
+  state.sections = state.sections.slice(start / GROUP_SIZE, (start + count) / GROUP_SIZE);
+  state.barCount = count;
   state.tracks.forEach(track => {
-    track.bars = track.bars.slice(start, start + GROUP_SIZE);
-    if (track.durations) track.durations = track.durations.slice(start, start + GROUP_SIZE);
-    if (track.velocities) track.velocities = track.velocities.slice(start, start + GROUP_SIZE);
-    if(track.drumVelocities)track.drumVelocities=track.drumVelocities.slice(start,start+GROUP_SIZE);
-    if(track.chordDurations)track.chordDurations=track.chordDurations.slice(start,start+GROUP_SIZE);
-    if(track.chordVoicings)track.chordVoicings=track.chordVoicings.slice(start,start+GROUP_SIZE);
+    track.bars = track.bars.slice(start, start + count);
+    if (track.durations) track.durations = track.durations.slice(start, start + count);
+    if (track.velocities) track.velocities = track.velocities.slice(start, start + count);
+    if(track.drumVelocities)track.drumVelocities=track.drumVelocities.slice(start,start+count);
+    if(track.chordDurations)track.chordDurations=track.chordDurations.slice(start,start+count);
+    if(track.chordVoicings)track.chordVoicings=track.chordVoicings.slice(start,start+count);
   });
   return state;
 }
+export function sectionState(value, start) { return rangeState(value,start,GROUP_SIZE); }
 export function phraseState(value, start, mode = 'melody') {
   if (!['melody', 'duet'].includes(mode)) throw new Error('段落试听模式无效');
   const state = sectionState(value, start);

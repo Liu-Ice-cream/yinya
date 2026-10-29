@@ -23,6 +23,7 @@ import {HarmonyEditor} from './harmony-editor.js';
 import {HarmonyWorkshop} from './harmony-workshop.js';
 import {ArrangerBoard} from './arranger-board.js';
 import {VariationWorkshop} from './variation-workshop.js';
+import {TransitionWorkshop} from './transition-workshop.js';
 
 const $ = id => document.getElementById(id);
 const KEYS = { draft: 'yinya.v16.draft', library: 'yinya.v16.library', preferences: 'yinya.v1.preferences' };
@@ -49,6 +50,7 @@ let phraseActive = false, transportRange = null, wasPlaying = false;
 let orchestrationActive = false;
 let arrangerBoard=null;
 let variationWorkshop=null;
+let transitionWorkshop=null;
 const preview = new PreviewPlayer();
 
 function read(key) {
@@ -117,6 +119,7 @@ function commit(next, message, id = activeId) {
   if (workshopSession) closeWorkshop();
   if (melodySession) closeMelodyWorkshop();
   if (variationWorkshop?.session) variationWorkshop.close();
+  if (transitionWorkshop?.session) transitionWorkshop.close();
   preview.stop();
   history.push(snapshot()); if (history.length > 100) history.shift(); future.length = 0;
   state = clean; activeId = id;
@@ -158,6 +161,8 @@ function renderControls() {
   $('editor-view-label').hidden = false; $('editor-view').value=editorView; $('editor-view').disabled=exporting;
   renderTheoryControls();
   $('open-variation').disabled = $('open-harmony').disabled = $('open-drums').disabled = $('open-dynamics').disabled = $('open-workshop').disabled = $('open-melody').disabled = exporting;
+  $('open-transition').disabled=exporting||state.barCount<8;
+  $('open-transition').title=state.barCount<8?'至少需要两个四小节段，可先新增空白段。':'连续八小节比较相邻段落的鼓点与音量衔接';
   $('title').value = state.title; $('tempo').value = state.tempo;
   $('bar-count').value = state.barCount;
   $('length-fill').disabled = state.barCount === 32;
@@ -361,6 +366,7 @@ function syncPlayback() {
   lastStep = view.playing ? view.absolute : -1;
 }
 function playbackFrame() {
+  if(transitionWorkshop?.side)transitionWorkshop.playback(preview.elapsedSeconds());
   if (wasPlaying && !synth.playing) { stop(); status('已播放到整曲结尾。'); }
   if (synth.playing && Math.floor(synth.playhead * 16) !== lastStep) syncPlayback();
   if(!synth.playing&&orchestrationActive){const seconds=preview.elapsedSeconds();if(seconds!==null){const steps=Math.floor(seconds*state.tempo/60*4),start=Math.floor(follower.selectedBar/GROUP_SIZE)*GROUP_SIZE;const view={playing:steps<64,bar:start+Math.floor(steps/16),step:steps%16};phraseEditor?.playback(view);drumEditor?.playback(view);harmonyEditor?.playback(view);arrangerBoard?.playback(view);}}
@@ -598,6 +604,8 @@ const dynamicEditor=new DynamicEditor($('dynamic-dialog'),{get:()=>state,beforeE
 $('open-dynamics').addEventListener('click',()=>{if(!exporting)dynamicEditor.open(Math.floor(follower.selectedBar/GROUP_SIZE));});
 variationWorkshop=new VariationWorkshop($('variation-dialog'),{get:()=>state,disabled:()=>exporting,beforeEdit:stop,preview,confirm:confirmChange,commit:(next,message,index)=>{selectedNote=null;selectedChord=null;selectedTrack=0;editorView='phrase';pitchRange='all';follower.select(index*4);commit(next,message);savePreferences(message);}});
 $('open-variation').addEventListener('click',()=>variationWorkshop.open(Math.floor(follower.selectedBar/4)));
+transitionWorkshop=new TransitionWorkshop($('transition-dialog'),{get:()=>state,disabled:()=>exporting,beforeEdit:stop,preview,confirm:confirmChange,status,commit:(next,message,index,drums)=>{selectedNote=null;selectedChord=null;if(drums){selectedTrack=3;editorView='phrase';}follower.select(index*4+3);commit(next,message);savePreferences(message);}});
+$('open-transition').addEventListener('click',()=>transitionWorkshop.open(Math.floor(follower.selectedBar/4)));
 arrangerBoard=new ArrangerBoard($('arranger-board'),{
   get:()=>({state,index:Math.floor(follower.selectedBar/4),track:selectedTrack,disabled:exporting,playing:synth.playing}),preview,status,beforeEdit:stop,confirm:confirmChange,previewEnded:syncPlayback,
   open:(index,track)=>{if(exporting)return;stop();selectedNote=null;selectedChord=null;selectedTrack=track;editorView='phrase';follower.select(index*4);render();savePreferences(`正在编辑「${state.sections[index].name}」的${TRACKS[track].name}，第 ${index*4+1}–${index*4+4} 小节。`);$('track-name').focus({preventScroll:true});$('track-name').scrollIntoView({block:'start'});},
